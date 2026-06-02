@@ -1,0 +1,7 @@
+# Column: dept_name Type: STRING
+Engineering
+Engineering
+Sales
+Marketing
+HR
+Finance

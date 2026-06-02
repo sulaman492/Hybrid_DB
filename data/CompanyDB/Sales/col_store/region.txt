@@ -1,0 +1,16 @@
+# Column: region Type: STRING
+North
+South
+East
+West
+North
+North
+South
+East
+West
+East
+North
+South
+South
+West
+West

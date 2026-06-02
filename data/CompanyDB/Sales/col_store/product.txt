@@ -1,0 +1,16 @@
+# Column: product Type: STRING
+Laptop
+Mouse
+Keyboard
+Monitor
+Laptop
+Mouse
+Keyboard
+Monitor
+Laptop
+Mouse
+Keyboard
+Monitor
+Laptop
+Mouse
+Keyboard

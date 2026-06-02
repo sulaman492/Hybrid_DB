@@ -1,0 +1,3 @@
+[{'name': 'sale_id', 'type': 'INT'}, {'name': 'product', 'type': 'STRING'}, {'name': 'amount', 'type': 'INT'}, {'name': 'region', 'type': 'STRING'}]
+['sale_id']
+[]

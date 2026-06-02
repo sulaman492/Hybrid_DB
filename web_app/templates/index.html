@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid DBMS - Web Console</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎓 Hybrid DBMS Console</h1>
+            <p>Row Store + Column Store Database Management System</p>
+        </header>
+
+        <div class="sidebar">
+            <div class="db-info">
+                <h3>Current Database</h3>
+                <div class="current-db" id="currentDb">{{ current_db or 'None' }}</div>
+            </div>
+
+            <div class="db-list">
+                <h3>Databases</h3>
+                <ul id="databaseList">
+                    {% for db in databases %}
+                    <li class="{% if db == current_db %}active{% endif %}">{{ db }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="table-list">
+                <h3>Tables</h3>
+                <ul id="tableList">
+                    {% for table in tables %}
+                    <li>{{ table }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="info">
+                <h4>💡 Tips</h4>
+                <ul>
+                    <li>Use semicolon at end of queries</li>
+                    <li>Aggregations use Column Store</li>
+                    <li>INSERT/UPDATE use Row Store</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="main">
+            <div class="query-area">
+                <textarea id="queryInput" placeholder="Enter your SQL query here...
+Example:
+SELECT * FROM Employee;
+SELECT AVG(salary) FROM Employee;
+SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
+                <div class="query-buttons">
+                    <button id="executeBtn">▶ Execute</button>
+                    <button id="clearBtn">🗑 Clear</button>
+                    <button id="resetBtn">🔄 Reset</button>
+                </div>
+            </div>
+
+            <div class="results-area">
+                <div class="results-header">
+                    <span>Query Results</span>
+                    <span id="rowCount"></span>
+                </div>
+                <div id="results" class="results-content">
+                    <div class="placeholder">Execute a query to see results</div>
+                </div>
+            </div>
+
+            <div class="history-area">
+                <div class="history-header">
+                    <span>Query History</span>
+                    <button id="clearHistoryBtn">Clear</button>
+                </div>
+                <ul id="historyList">
+                    <li class="placeholder">No queries executed yet</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,299 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    grid-column: 1 / -1;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+header h1 {
+    color: #667eea;
+    margin-bottom: 5px;
+}
+
+header p {
+    color: #666;
+}
+
+.sidebar {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    height: fit-content;
+}
+
+.sidebar h3 {
+    color: #667eea;
+    margin-bottom: 10px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.sidebar h4 {
+    color: #333;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.current-db {
+    background: #e8f4f8;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: monospace;
+    color: #667eea;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+.db-list ul, .table-list ul {
+    list-style: none;
+    margin-bottom: 20px;
+}
+
+.db-list li, .table-list li {
+    padding: 8px 10px;
+    margin: 2px 0;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.db-list li:hover, .table-list li:hover {
+    background: #f0f0f0;
+}
+
+.db-list li.active {
+    background: #667eea;
+    color: white;
+}
+
+.info ul {
+    list-style: none;
+    font-size: 12px;
+    color: #666;
+}
+
+.info li {
+    padding: 3px 0;
+}
+
+.main {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.query-area {
+    margin-bottom: 20px;
+}
+
+#queryInput {
+    width: 100%;
+    height: 150px;
+    padding: 15px;
+    font-family: 'Consolas', monospace;
+    font-size: 14px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+#queryInput:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.query-buttons {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+.query-buttons button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+#executeBtn {
+    background: #28a745;
+    color: white;
+}
+
+#executeBtn:hover {
+    background: #218838;
+}
+
+#clearBtn {
+    background: #ffc107;
+    color: #333;
+}
+
+#clearBtn:hover {
+    background: #e0a800;
+}
+
+#resetBtn {
+    background: #dc3545;
+    color: white;
+}
+
+#resetBtn:hover {
+    background: #c82333;
+}
+
+.results-area {
+    margin-bottom: 20px;
+}
+
+.results-header {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px 5px 0 0;
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+}
+
+#rowCount {
+    color: #666;
+    font-size: 12px;
+}
+
+.results-content {
+    border: 1px solid #e0e0e0;
+    border-radius: 0 0 5px 5px;
+    min-height: 300px;
+    max-height: 400px;
+    overflow: auto;
+    background: #fafafa;
+}
+
+.results-content table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.results-content th {
+    background: #667eea;
+    color: white;
+    padding: 10px;
+    text-align: left;
+    position: sticky;
+    top: 0;
+}
+
+.results-content td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.results-content tr:hover {
+    background: #f0f0f0;
+}
+
+.placeholder {
+    padding: 40px;
+    text-align: center;
+    color: #999;
+}
+
+.history-area {
+    border-top: 1px solid #e0e0e0;
+    padding-top: 15px;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.history-header span {
+    font-weight: bold;
+}
+
+#clearHistoryBtn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+#historyList {
+    list-style: none;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+#historyList li {
+    padding: 5px 10px;
+    font-family: monospace;
+    font-size: 12px;
+    border-bottom: 1px solid #e0e0e0;
+    cursor: pointer;
+}
+
+#historyList li:hover {
+    background: #f0f0f0;
+}
+
+#historyList li.placeholder {
+    color: #999;
+    text-align: center;
+}
+
+.error {
+    color: #dc3545;
+    padding: 15px;
+    background: #f8d7da;
+    border-radius: 5px;
+}
+
+.success {
+    color: #28a745;
+    padding: 15px;
+    background: #d4edda;
+    border-radius: 5px;
+}
+
+.value-result {
+    padding: 20px;
+    font-size: 24px;
+    text-align: center;
+    color: #667eea;
+    font-weight: bold;
+}

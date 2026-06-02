@@ -1,0 +1,9 @@
+emp_id,emp_name,dept_id,salary,attendance
+101,John Smith,1,100000,90
+102,Sarah Johnson,2,95000,88
+103,Mike Brown,3,65000,80
+105,David Wilson,5,75000,85
+106,Lisa Anderson,1,105000,92
+108,Maria Garcia,3,88000,88
+109,James Moore,1,82000,91
+110,Patricia White,5,68000,86

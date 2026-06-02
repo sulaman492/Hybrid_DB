@@ -1,0 +1,3 @@
+[{'name': 'emp_id', 'type': 'INT'}, {'name': 'emp_name', 'type': 'STRING'}, {'name': 'dept_id', 'type': 'INT'}, {'name': 'salary', 'type': 'INT'}, {'name': 'attendance', 'type': 'INT'}]
+['emp_id']
+[]
