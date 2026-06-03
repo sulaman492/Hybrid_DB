@@ -15,15 +15,19 @@ class QueryParser:
         
         values = []
         for val in values_str.split(','):
-            val = val.strip().strip("'\"")
-            try:
-                val = int(val)
-            except:
+            val = val.strip()
+            if val.upper() == "NULL":
+                values.append(None)
+            else:
+                val = val.strip("'\"")
                 try:
-                    val = float(val)
+                    val = int(val)
                 except:
-                    pass
-            values.append(val)
+                    try:
+                        val = float(val)
+                    except:
+                        pass
+                values.append(val)
         
         return table_name, values
     

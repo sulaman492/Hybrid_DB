@@ -1,0 +1,4 @@
+# Column: last_name Type: STRING
+Johnson
+Garcia
+Garcia

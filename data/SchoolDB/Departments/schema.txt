@@ -1,0 +1,4 @@
+[{'name': 'dept_id', 'type': 'INT', 'autoincrement': True, 'unique': False, 'not_null': False, 'default': None}, {'name': 'dept_name', 'type': 'STRING', 'autoincrement': False, 'unique': True, 'not_null': True, 'default': None}, {'name': 'building', 'type': 'STRING', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'budget', 'type': 'INT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}]
+['dept_id']
+[]
+['budget>=0']

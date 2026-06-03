@@ -42,11 +42,13 @@ class SchemaManager:
                 columns = eval(lines[0].strip())
                 pk = eval(lines[1].strip()) if len(lines) > 1 else []
                 fk = eval(lines[2].strip()) if len(lines) > 2 else []
+                checks = eval(lines[3].strip()) if len(lines) > 3 else []
                 
                 self.tables[table_name] = {
                     "columns": columns,
                     "primary_key": pk,
-                    "foreign_keys": fk
+                    "foreign_keys": fk,
+                    "checks": checks
                 }
     
     # ========== DATABASE METHODS ==========
@@ -142,6 +144,7 @@ class SchemaManager:
         columns = []
         primary_keys = []
         foreign_keys = []
+        checks = []
         
         col_defs = self._split_column_defs(columns_def)
         
@@ -151,6 +154,13 @@ class SchemaManager:
             if not col_def:
                 continue
             
+            # Check for standalone CHECK constraint
+            if col_def.upper().startswith("CHECK"):
+                check_match = re.search(r"CHECK\s*\((.*)\)", col_def, re.IGNORECASE)
+                if check_match:
+                    checks.append(check_match.group(1).strip())
+                continue
+
             # Check for standalone PRIMARY KEY constraint (e.g., PRIMARY KEY (dept_id))
             if col_def.upper().startswith("PRIMARY KEY"):
                 pk_match = re.search(r"PRIMARY KEY\s*\((\w+)\)", col_def, re.IGNORECASE)
@@ -169,8 +179,54 @@ class SchemaManager:
                     })
                 continue
             
+            # Check for inline CHECK constraint
+            inline_check_match = re.search(r"CHECK\s*\((.*?)\)", col_def, re.IGNORECASE)
+            if inline_check_match:
+                checks.append(inline_check_match.group(1).strip())
+                col_def = re.sub(r"CHECK\s*\(.*?\)", "", col_def, flags=re.IGNORECASE).strip()
+
+            # Check for inline AUTOINCREMENT
+            autoincrement = False
+            if "AUTOINCREMENT" in col_def.upper():
+                autoincrement = True
+                col_def = re.sub(r"\bAUTOINCREMENT\b", "", col_def, flags=re.IGNORECASE).strip()
+
+            # Check for inline UNIQUE
+            unique = False
+            if re.search(r"\bUNIQUE\b", col_def, re.IGNORECASE):
+                unique = True
+                col_def = re.sub(r"\bUNIQUE\b", "", col_def, flags=re.IGNORECASE).strip()
+
+            # Check for inline NOT NULL
+            not_null = False
+            if re.search(r"\bNOT\s+NULL\b", col_def, re.IGNORECASE):
+                not_null = True
+                col_def = re.sub(r"\bNOT\s+NULL\b", "", col_def, flags=re.IGNORECASE).strip()
+
+            # Check for inline DEFAULT
+            default_val = None
+            default_match = re.search(r"\bDEFAULT\s+((?:'[^']*')|(?:\"[^\"]*\")|\S+)", col_def, re.IGNORECASE)
+            if default_match:
+                raw_default = default_match.group(1)
+                if raw_default.startswith("'") and raw_default.endswith("'"):
+                    default_val = raw_default[1:-1]
+                elif raw_default.startswith('"') and raw_default.endswith('"'):
+                    default_val = raw_default[1:-1]
+                else:
+                    try:
+                        if '.' in raw_default:
+                            default_val = float(raw_default)
+                        elif raw_default.upper() == 'TRUE':
+                            default_val = True
+                        elif raw_default.upper() == 'FALSE':
+                            default_val = False
+                        else:
+                            default_val = int(raw_default)
+                    except ValueError:
+                        default_val = raw_default
+                col_def = re.sub(r"\bDEFAULT\s+(?:(?:'[^']*')|(?:\"[^\"]*\")|\S+)", "", col_def, flags=re.IGNORECASE).strip()
+
             # Parse regular column: id INT or id INT PRIMARY KEY
-            # Split into parts, but PRIMARY KEY might be multiple words
             col_parts = col_def.split()
             if len(col_parts) >= 2:
                 col_name = col_parts[0]
@@ -186,16 +242,26 @@ class SchemaManager:
                 
                 columns.append({
                     "name": col_name,
-                    "type": col_type
+                    "type": col_type,
+                    "autoincrement": autoincrement,
+                    "unique": unique,
+                    "not_null": not_null,
+                    "default": default_val
                 })
                 
                 if has_primary_key:
                     primary_keys.append(col_name)
+                    columns[-1]["autoincrement"] = True
         
         if not columns:
             return False, "No valid columns defined"
+            
+        # Ensure all primary keys are marked as autoincrement (per user requirements)
+        for col in columns:
+            if col["name"] in primary_keys and col["type"] == "INT":
+                col["autoincrement"] = True
         
-        return self.create_table(table_name, columns, primary_keys, foreign_keys)
+        return self.create_table(table_name, columns, primary_keys, foreign_keys, checks)
     
     def _split_column_defs(self, columns_def):
         """Split column definitions handling parentheses and nested commas"""
@@ -232,7 +298,7 @@ class SchemaManager:
         
         return parts
     
-    def create_table(self, table_name, columns, primary_keys, foreign_keys):
+    def create_table(self, table_name, columns, primary_keys, foreign_keys, checks=[]):
         """Create a new table in current database"""
         if not self.current_db:
             return False, "No database selected"
@@ -249,6 +315,7 @@ class SchemaManager:
             f.write(str(columns) + "\n")
             f.write(str(primary_keys) + "\n")
             f.write(str(foreign_keys) + "\n")
+            f.write(str(checks) + "\n")
         
         # Create row_store.txt with header
         col_names = [col["name"] for col in columns]
@@ -265,7 +332,8 @@ class SchemaManager:
         self.tables[table_name] = {
             "columns": columns,
             "primary_key": primary_keys,
-            "foreign_keys": foreign_keys
+            "foreign_keys": foreign_keys,
+            "checks": checks
         }
         
         # Update metadata
@@ -278,6 +346,8 @@ class SchemaManager:
             print(f"   Primary Key: {primary_keys}")
         if foreign_keys:
             print(f"   Foreign Keys: {foreign_keys}")
+        if checks:
+            print(f"   Checks: {checks}")
         
         return True, f"Table '{table_name}' created"
     

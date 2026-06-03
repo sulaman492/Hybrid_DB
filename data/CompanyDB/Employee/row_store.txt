@@ -7,3 +7,5 @@ emp_id,emp_name,dept_id,salary,attendance
 108,Maria Garcia,3,88000,88
 109,James Moore,1,82000,91
 110,Patricia White,5,68000,86
+111,John Doe,1,85000,90
+112,Doe Doe,1,85000,90

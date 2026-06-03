@@ -58,10 +58,81 @@ class DBCore:
         if not schema:
             return False, f"Table '{table_name}' not found"
         
-        expected_count = len(schema["columns"])
-        if len(values) != expected_count:
-            return False, f"Expected {expected_count} values, got {len(values)}"
+        # Resolve autoincrement
+        autoincrement_col = None
+        autoincrement_idx = -1
+        for i, col in enumerate(schema["columns"]):
+            if col.get("autoincrement") or (col["name"] in schema.get("primary_key", []) and col["type"] == "INT"):
+                autoincrement_col = col["name"]
+                autoincrement_idx = i
+                break
         
+        expected_count = len(schema["columns"])
+        
+        if autoincrement_idx != -1:
+            if len(values) == expected_count:
+                return False, f"Expected {expected_count - 1} values (excluding AUTOINCREMENT column '{autoincrement_col}'), got {len(values)}"
+            elif len(values) != expected_count - 1:
+                return False, f"Expected {expected_count - 1} values (excluding AUTOINCREMENT column '{autoincrement_col}'), got {len(values)}"
+            
+            # Load existing rows for autoincrement calculation
+            rows = self.storage_manager.load_rows(current_db, table_name)
+            
+            if not rows:
+                next_id = 1
+            else:
+                existing_ids = [r.get(autoincrement_col) for r in rows if r.get(autoincrement_col) is not None]
+                next_id = max(existing_ids) + 1 if existing_ids else 1
+                
+            # Insert the next_id into the values list at the correct index
+            values.insert(autoincrement_idx, next_id)
+        else:
+            if len(values) != expected_count:
+                return False, f"Expected {expected_count} values, got {len(values)}"
+            
+            # Load existing rows
+            rows = self.storage_manager.load_rows(current_db, table_name)
+
+        # Resolve Defaults, NOT NULL, and UNIQUE constraints
+        for i, col in enumerate(schema["columns"]):
+            if i >= len(values):
+                break
+                
+            val = values[i]
+            
+            # 1. Resolve Default and NOT NULL
+            if val == "" or val is None:
+                if col.get("default") is not None:
+                    values[i] = col["default"]
+                    val = values[i]
+                elif col.get("not_null"):
+                    return False, f"NOT NULL constraint violated: column '{col['name']}' cannot be empty/null"
+            
+            # 2. Enforce UNIQUE (and PRIMARY KEY implies UNIQUE)
+            is_unique = col.get("unique") or col["name"] in schema.get("primary_key", [])
+            if is_unique and val is not None and val != "":
+                for row in rows:
+                    if row.get(col["name"]) == val:
+                        return False, f"UNIQUE constraint violated: value '{val}' already exists in column '{col['name']}'"
+
+        # Strict type verification
+        for i, col in enumerate(schema["columns"]):
+            val = values[i]
+            if val is not None:
+                if col["type"] == "INT":
+                    if not isinstance(val, int) or isinstance(val, bool):
+                        return False, f"Type mismatch: column '{col['name']}' expects INT, got {type(val).__name__}"
+                elif col["type"] in ("FLOAT", "REAL"):
+                    if not isinstance(val, (int, float)) or isinstance(val, bool):
+                        return False, f"Type mismatch: column '{col['name']}' expects FLOAT/REAL, got {type(val).__name__}"
+
+        # Evaluate CHECK constraints
+        row_dict = {col["name"]: values[i] for i, col in enumerate(schema["columns"])}
+        checks = schema.get("checks", [])
+        for check in checks:
+            if not self.parser.evaluate_where(row_dict, check):
+                return False, f"Check constraint violated: {check}"
+
         self.storage_manager.insert_row(current_db, table_name, values)
         
         for i, col in enumerate(schema["columns"]):
@@ -139,9 +210,11 @@ class DBCore:
         
         # Check if column exists
         col_exists = False
+        target_col_schema = None
         for col in schema["columns"]:
             if col["name"] == set_column:
                 col_exists = True
+                target_col_schema = col
                 break
         
         if not col_exists:
@@ -153,6 +226,61 @@ class DBCore:
         if not rows:
             return True, f"No rows to update in '{table_name}'"
         
+        # Validate type for update value
+        if set_value is not None:
+            if target_col_schema["type"] == "INT":
+                if not isinstance(set_value, int) or isinstance(set_value, bool):
+                    return False, f"Type mismatch: column '{set_column}' expects INT, got {type(set_value).__name__}"
+            elif target_col_schema["type"] in ("FLOAT", "REAL"):
+                if not isinstance(set_value, (int, float)) or isinstance(set_value, bool):
+                    return False, f"Type mismatch: column '{set_column}' expects FLOAT/REAL, got {type(set_value).__name__}"
+
+        # Validate DEFAULT and NOT NULL for update value
+        if set_value == "" or set_value is None:
+            if target_col_schema.get("default") is not None:
+                set_value = target_col_schema["default"]
+            elif target_col_schema.get("not_null"):
+                return False, f"NOT NULL constraint violated: column '{set_column}' cannot be empty/null"
+
+        # Validate UNIQUE for update value
+        is_unique = target_col_schema.get("unique") or set_column in schema.get("primary_key", [])
+        if is_unique and set_value is not None and set_value != "":
+            # We must check against all OTHER rows not being updated to this value, 
+            # or just simply check if any row already has this value (which isn't the current row being updated to the same value).
+            # The safest approach for UNIQUE update is checking if ANY row that IS NOT the current one has it.
+            # But we evaluate WHERE later. For now, if updating to a unique value, check if it's already there in ANY row that won't be updated.
+            # Actually, if we update MULTIPLE rows to the same value and it's UNIQUE, it'll fail. 
+            pass  # We will do UNIQUE check during the row update loop instead.
+
+        # Evaluate CHECK and UNIQUE constraints on simulated updates
+        checks = schema.get("checks", [])
+        new_values = [] # To track uniqueness within updated set
+        for row in rows:
+            should_update = False
+            if where_condition:
+                if self.parser.evaluate_where(row, where_condition):
+                    should_update = True
+            else:
+                should_update = True
+            
+            if should_update:
+                test_row = row.copy()
+                test_row[set_column] = set_value
+                for check in checks:
+                    if not self.parser.evaluate_where(test_row, check):
+                        return False, f"Check constraint violated: {check}"
+                
+                if is_unique and set_value is not None and set_value != "":
+                    # Check if already exists in other rows that are not being updated, or within new updates
+                    if set_value in new_values:
+                        return False, f"UNIQUE constraint violated: multiple rows updated to '{set_value}' in column '{set_column}'"
+                    for r in rows:
+                        if not (where_condition and self.parser.evaluate_where(r, where_condition)) and not (not where_condition):
+                            # This row `r` is NOT being updated
+                            if r.get(set_column) == set_value:
+                                return False, f"UNIQUE constraint violated: value '{set_value}' already exists in column '{set_column}'"
+                    new_values.append(set_value)
+
         # Update matching rows
         updated_count = 0
         for row in rows:

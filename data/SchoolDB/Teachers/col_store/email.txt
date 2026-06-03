@@ -1,0 +1,4 @@
+# Column: email Type: STRING
+robert@school.com
+maria@school.com
+maghfjria@school.com

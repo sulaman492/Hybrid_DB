@@ -1,0 +1,4 @@
+teacher_id,first_name,last_name,email,phone,hire_date,dept_id,salary
+1,Robert,Johnson,robert@school.com,5551001,2020-01-10,1,75000
+2,Maria,Garcia,maria@school.com,5551002,2019-03-15,1,82000
+3,Maria,Garcia,maghfjria@school.com,5551002,,1,82000

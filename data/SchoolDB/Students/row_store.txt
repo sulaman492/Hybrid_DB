@@ -1,0 +1,5 @@
+student_id,first_name,last_name,date_of_birth,gender,email,phone,address,enrollment_date,status
+1,John,Smith,2000-05-15,M,john@email.com,5550101,123MainSt,2024-01-15,Active
+2,Emma,Johnson,2001-08-22,F,emma@email.com,5550102,456OakAve,2024-01-15,Active
+3,Michael,Brown,1999-12-10,M,michael@email.com,5550103,789PineRd,2024-01-20,Active
+4,Michaedsdl,Brdsdown,1999-12-10,M,michaesdsl@email.com,5550103,789PineRd,2024-01-20,Active
