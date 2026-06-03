@@ -1,0 +1,6 @@
+[{'name': 'dept_id', 'type': 'INT'}, {'name': 'dept_name', 'type': 'VARCHAR'}, {'name': 'budget', 'type': 'DECIMAL'}]
+['dept_id']
+[]
+{'dept_id': {'not_null': True, 'auto_increment': True, 'default': None, 'unique': True, 'check': None}, 'dept_name': {'not_null': True, 'auto_increment': False, 'default': None, 'unique': True, 'check': None}, 'budget': {'not_null': False, 'auto_increment': False, 'default': '0', 'unique': False, 'check': None}}
+{}
+{'_global_check': 'budget >= 0'}

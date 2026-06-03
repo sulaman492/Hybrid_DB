@@ -1,7 +1,0 @@
-# Column: location Type: STRING
-New York
-New York
-Chicago
-San Francisco
-Boston
-New York
