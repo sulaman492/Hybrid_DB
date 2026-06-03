@@ -1,0 +1,6 @@
+[{'name': 'id', 'type': 'INT'}, {'name': 'name', 'type': 'VARCHAR'}, {'name': 'age', 'type': 'INT'}, {'name': 'salary', 'type': 'DECIMAL'}, {'name': 'email', 'type': 'VARCHAR'}, {'name': 'active', 'type': 'BOOLEAN'}]
+['id']
+[]
+{'id': {'not_null': True, 'auto_increment': True, 'default': None, 'unique': True, 'check': None}, 'name': {'not_null': True, 'auto_increment': False, 'default': None, 'unique': False, 'check': None}, 'age': {'not_null': False, 'auto_increment': False, 'default': None, 'unique': False, 'check': None}, 'salary': {'not_null': False, 'auto_increment': False, 'default': None, 'unique': False, 'check': None}, 'email': {'not_null': False, 'auto_increment': False, 'default': None, 'unique': True, 'check': None}, 'active': {'not_null': False, 'auto_increment': False, 'default': 'TRUE', 'unique': False, 'check': None}}
+{}
+{}

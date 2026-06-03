@@ -3,86 +3,829 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hybrid DBMS - Web Console</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Database Management System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 280px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .current-db {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        .sidebar-section {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sidebar-section h3 {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .sidebar-section ul {
+            list-style: none;
+        }
+
+        .sidebar-section li {
+            padding: 8px 10px;
+            margin: 2px 0;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+
+        .sidebar-section li:hover {
+            background: #f0f0f0;
+            transform: translateX(5px);
+        }
+
+        .sidebar-section li.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .placeholder {
+            color: #999;
+            font-style: italic;
+            padding: 8px;
+            font-size: 0.85rem;
+        }
+
+        /* Main Content Styles */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #f5f5f5;
+        }
+
+        .toolbar {
+            background: white;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .query-area {
+            padding: 20px;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .results-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f9f9f9;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .results-header h3 {
+            color: #333;
+        }
+
+        #rowCount {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* Table Styles */
+        .results-table, .schema-table, .db-table, .tables-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .results-table th, .schema-table th, .db-table th, .tables-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .results-table td, .schema-table td, .db-table td, .tables-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .results-table tr:hover, .schema-table tr:hover {
+            background: #f5f5f5;
+        }
+
+        /* Error and Success Styles */
+        .error-container, .success-container {
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .error-container {
+            background: #fee;
+            border-left: 4px solid #dc3545;
+        }
+
+        .success-container {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .error-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .error-icon, .success-icon {
+            font-size: 24px;
+        }
+
+        .error-type {
+            font-weight: bold;
+            color: #dc3545;
+            font-size: 1.1rem;
+        }
+
+        .error-message {
+            color: #333;
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+
+        .error-suggestion {
+            color: #0066cc;
+            margin-top: 10px;
+            padding: 8px;
+            background: #e3f2fd;
+            border-radius: 5px;
+        }
+
+        .error-help {
+            margin-top: 10px;
+        }
+
+        .error-help details {
+            cursor: pointer;
+        }
+
+        .error-help summary {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .help-content {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+        }
+
+        .help-content ul {
+            margin-left: 20px;
+            margin-top: 5px;
+        }
+
+        .help-content li {
+            margin: 5px 0;
+        }
+
+        .value-result {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .value-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .value-content {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .placeholder {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        /* History Panel */
+        .history-panel {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .history-query {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #555;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>🎓 Hybrid DBMS Console</h1>
-            <p>Row Store + Column Store Database Management System</p>
-        </header>
-
+        <!-- Sidebar -->
         <div class="sidebar">
-            <div class="db-info">
-                <h3>Current Database</h3>
-                <div class="current-db" id="currentDb">{{ current_db or 'None' }}</div>
+            <div class="sidebar-header">
+                <h2>📊 Database Manager</h2>
+                <div class="current-db">
+                    Current DB: <strong id="currentDb">None</strong>
+                </div>
             </div>
-
-            <div class="db-list">
-                <h3>Databases</h3>
+            
+            <div class="sidebar-section">
+                <h3>🗄️ Databases</h3>
                 <ul id="databaseList">
-                    {% for db in databases %}
-                    <li class="{% if db == current_db %}active{% endif %}">{{ db }}</li>
-                    {% endfor %}
+                    <li class="placeholder">Loading...</li>
                 </ul>
             </div>
-
-            <div class="table-list">
-                <h3>Tables</h3>
+            
+            <div class="sidebar-section">
+                <h3>📋 Tables</h3>
                 <ul id="tableList">
-                    {% for table in tables %}
-                    <li>{{ table }}</li>
-                    {% endfor %}
+                    <li class="placeholder">No database selected</li>
                 </ul>
             </div>
-
-            <div class="info">
-                <h4>💡 Tips</h4>
-                <ul>
-                    <li>Use semicolon at end of queries</li>
-                    <li>Aggregations use Column Store</li>
-                    <li>INSERT/UPDATE use Row Store</li>
-                </ul>
-            </div>
-        </div>
-
-        <div class="main">
-            <div class="query-area">
-                <textarea id="queryInput" placeholder="Enter your SQL query here...
-Example:
-SELECT * FROM Employee;
-SELECT AVG(salary) FROM Employee;
-SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
-                <div class="query-buttons">
-                    <button id="executeBtn">▶ Execute</button>
-                    <button id="clearBtn">🗑 Clear</button>
-                    <button id="resetBtn">🔄 Reset</button>
-                </div>
-            </div>
-
-            <div class="results-area">
-                <div class="results-header">
-                    <span>Query Results</span>
-                    <span id="rowCount"></span>
-                </div>
-                <div id="results" class="results-content">
-                    <div class="placeholder">Execute a query to see results</div>
-                </div>
-            </div>
-
-            <div class="history-area">
-                <div class="history-header">
-                    <span>Query History</span>
-                    <button id="clearHistoryBtn">Clear</button>
-                </div>
-                <ul id="historyList">
+            
+            <div class="sidebar-section">
+                <h3>📜 Query History</h3>
+                <ul id="historyList" class="history-panel">
                     <li class="placeholder">No queries executed yet</li>
                 </ul>
             </div>
         </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="toolbar">
+                <button id="executeBtn" class="btn-primary">▶ Execute (Ctrl+Enter)</button>
+                <button id="clearBtn" class="btn-secondary">🗑 Clear</button>
+                <button id="resetBtn" class="btn-danger">🔄 Reset Session</button>
+                <button id="clearHistoryBtn" class="btn-secondary">📜 Clear History</button>
+            </div>
+            
+            <div class="query-area">
+                <textarea id="queryInput" placeholder="Enter your SQL query here...
+Example:
+CREATE DATABASE test_db;
+USE DATABASE test_db;
+CREATE TABLE users (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(100));
+INSERT INTO users (name) VALUES ('John Doe');
+"></textarea>
+            </div>
+            
+            <div class="results-area">
+                <div class="results-header">
+                    <h3>Query Results</h3>
+                    <span id="rowCount"></span>
+                </div>
+                <div id="results">
+                    <div class="placeholder">Execute a query to see results</div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        let queryHistory = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const executeBtn = document.getElementById('executeBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+            const queryInput = document.getElementById('queryInput');
+
+            executeBtn.addEventListener('click', executeQuery);
+            clearBtn.addEventListener('click', () => { queryInput.value = ''; });
+            resetBtn.addEventListener('click', resetSession);
+            clearHistoryBtn.addEventListener('click', clearHistory);
+
+            // Enter key to execute (Ctrl+Enter)
+            queryInput.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    executeQuery();
+                }
+            });
+
+            // Load initial data
+            refreshSidebar();
+        });
+
+        // Database/table clicks (event delegation)
+        document.getElementById('databaseList')?.addEventListener('click', (e) => {
+            let target = e.target;
+            while (target && target.tagName !== 'LI') {
+                target = target.parentElement;
+            }
+            if (target && target.tagName === 'LI' && !target.classList.contains('placeholder')) {
+                let dbName = target.textContent.replace('📁 ', '');
+                executeCommand(`USE DATABASE ${dbName};`);
+            }
+        });
+
+        document.getElementById('tableList')?.addEventListener('click', (e) => {
+            let target = e.target;
+            while (target && target.tagName !== 'LI') {
+                target = target.parentElement;
+            }
+            if (target && target.tagName === 'LI' && !target.classList.contains('placeholder')) {
+                let tableName = target.textContent.replace('📋 ', '');
+                executeCommand(`SELECT * FROM ${tableName};`);
+            }
+        });
+
+        async function executeQuery() {
+            const queryInput = document.getElementById('queryInput');
+            const query = queryInput.value.trim();
+            
+            if (!query) {
+                showError('Please enter a query');
+                return;
+            }
+
+            await executeCommand(query);
+        }
+
+        async function executeCommand(query) {
+            // Add to history
+            addToHistory(query);
+            
+            // Show loading
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="placeholder">⏳ Executing query...</div>';
+            document.getElementById('rowCount').textContent = '';
+            
+            try {
+                const response = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Handle different response types
+                if (data.success === false || data.type === 'error') {
+                    displayConstraintError(data);
+                } else {
+                    displayResults(data);
+                }
+                
+                // Refresh sidebar based on query type
+                const queryUpper = query.toUpperCase();
+                if (queryUpper.includes('CREATE DATABASE') || 
+                    queryUpper.includes('USE DATABASE') ||
+                    queryUpper.includes('DROP DATABASE') ||
+                    queryUpper.includes('CREATE TABLE') ||
+                    queryUpper.includes('DROP TABLE') ||
+                    queryUpper.includes('INSERT INTO')) {
+                    await refreshSidebar();
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`Connection error: ${error.message}. Make sure the server is running.`);
+            }
+        }
+
+        function displayConstraintError(data) {
+            const resultsDiv = document.getElementById('results');
+            const errorMessage = data.message || data.error || 'Unknown error occurred';
+            
+            // Check for specific constraint violations and format accordingly
+            let errorType = 'General Error';
+            let formattedMessage = errorMessage;
+            let suggestion = 'Please check your query syntax and data types.';
+            
+            if (errorMessage.includes('AUTO_INCREMENT')) {
+                errorType = 'AUTO_INCREMENT Violation';
+                suggestion = 'Do not provide values for AUTO_INCREMENT columns. They will be auto-generated.';
+                formattedMessage = errorMessage.replace('Cannot insert value into AUTO_INCREMENT column', 
+                                                        '❌ Cannot manually insert into AUTO_INCREMENT column');
+            } 
+            else if (errorMessage.includes('NOT NULL')) {
+                errorType = 'NOT NULL Constraint Violation';
+                suggestion = 'This column requires a value. Provide a value or set a DEFAULT value.';
+            }
+            else if (errorMessage.includes('UNIQUE')) {
+                errorType = 'UNIQUE Constraint Violation';
+                suggestion = 'This value already exists. Please use a different value.';
+            }
+            else if (errorMessage.includes('FOREIGN KEY')) {
+                errorType = 'FOREIGN KEY Constraint Violation';
+                suggestion = 'The referenced value does not exist in the parent table.';
+            }
+            else if (errorMessage.includes('Type mismatch') || errorMessage.includes('INT')) {
+                errorType = 'Data Type Mismatch';
+                suggestion = 'Check that values match their column types (numbers for INT/DECIMAL, quoted text for VARCHAR/TEXT).';
+            }
+            else if (errorMessage.includes('DATE format')) {
+                errorType = 'Invalid Date Format';
+                suggestion = 'Use YYYY-MM-DD format for DATE columns (e.g., 2024-01-01).';
+            }
+            else if (errorMessage.includes('Expected') && errorMessage.includes('values')) {
+                errorType = 'Value Count Mismatch';
+                suggestion = 'Check the number of values matches the number of columns.';
+            }
+            else if (errorMessage.includes('duplicate primary key')) {
+                errorType = 'Duplicate Primary Key';
+                suggestion = 'Primary key values must be unique. Use a different value or let AUTO_INCREMENT handle it.';
+            }
+            
+            resultsDiv.innerHTML = `
+                <div class="error-container">
+                    <div class="error-header">
+                        <span class="error-icon">❌</span>
+                        <span class="error-type">${escapeHtml(errorType)}</span>
+                    </div>
+                    <div class="error-message">${escapeHtml(formattedMessage)}</div>
+                    <div class="error-suggestion">💡 ${escapeHtml(suggestion)}</div>
+                    <div class="error-help">
+                        <details>
+                            <summary>🔍 Show query help</summary>
+                            <div class="help-content">
+                                <p><strong>Quick Fixes:</strong></p>
+                                <ul>
+                                    <li><strong>INSERT:</strong> Specify column names: INSERT INTO table (col1, col2) VALUES (val1, val2)</li>
+                                    <li><strong>AUTO_INCREMENT:</strong> Don't provide values, let the database generate them</li>
+                                    <li><strong>Numbers:</strong> Don't use quotes around numbers (use 123, not '123')</li>
+                                    <li><strong>Strings:</strong> Always use quotes for text values</li>
+                                    <li><strong>Dates:</strong> Use YYYY-MM-DD format</li>
+                                    <li><strong>NULL:</strong> Use NULL keyword for empty values</li>
+                                </ul>
+                                <p><strong>Example correct INSERT:</strong></p>
+                                <pre style="background:#f4f4f4;padding:10px;border-radius:5px;overflow-x:auto;">
+INSERT INTO users (name, age, email) VALUES ('John Doe', 30, 'john@example.com');</pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            `;
+            document.getElementById('rowCount').textContent = '';
+        }
+
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            const rowCountSpan = document.getElementById('rowCount');
+            
+            if (data.type === 'select') {
+                if (!data.rows || data.rows.length === 0) {
+                    resultsDiv.innerHTML = '<div class="placeholder">📭 No results found</div>';
+                    rowCountSpan.textContent = '0 rows';
+                    return;
+                }
+                
+                // Create table
+                const table = document.createElement('table');
+                table.className = 'results-table';
+                const headers = Object.keys(data.rows[0]);
+                
+                // Header
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                headers.forEach(header => {
+                    const th = document.createElement('th');
+                    th.textContent = header;
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+                
+                // Body
+                const tbody = document.createElement('tbody');
+                data.rows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    headers.forEach(header => {
+                        const td = document.createElement('td');
+                        let value = row[header];
+                        if (value === undefined || value === null) value = 'NULL';
+                        td.textContent = String(value);
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+                table.appendChild(tbody);
+                
+                resultsDiv.innerHTML = '';
+                resultsDiv.appendChild(table);
+                rowCountSpan.textContent = `${data.rows.length} row(s)`;
+                
+            } else if (data.type === 'value') {
+                resultsDiv.innerHTML = `
+                    <div class="value-result">
+                        <div class="value-label">Result:</div>
+                        <div class="value-content">${escapeHtml(String(data.value))}</div>
+                    </div>
+                `;
+                rowCountSpan.textContent = '1 value';
+                
+            } else if (data.type === 'message') {
+                if (data.success) {
+                    resultsDiv.innerHTML = `
+                        <div class="success-container">
+                            <div class="success-icon">✅</div>
+                            <div class="success-message">${escapeHtml(data.message)}</div>
+                        </div>
+                    `;
+                } else {
+                    displayConstraintError(data);
+                }
+                rowCountSpan.textContent = '';
+                
+            } else if (data.type === 'schema') {
+                if (!data.columns || data.columns.length === 0) {
+                    resultsDiv.innerHTML = '<div class="placeholder">No schema information available</div>';
+                } else {
+                    let html = '<table class="schema-table"><thead><tr><th>Column</th><th>Type</th><th>Constraints</th></tr></thead><tbody>';
+                    data.columns.forEach(col => {
+                        html += `<tr>
+                                    <td><strong>${escapeHtml(col.name)}</strong></td>
+                                    <td>${escapeHtml(col.type)}</td>
+                                    <td>${escapeHtml(col.constraints || '-')}</td>
+                                 </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    resultsDiv.innerHTML = html;
+                }
+                rowCountSpan.textContent = `${data.columns ? data.columns.length : 0} column(s)`;
+                
+            } else if (data.type === 'databases') {
+                if (!data.databases || data.databases.length === 0) {
+                    resultsDiv.innerHTML = '<div class="placeholder">No databases found</div>';
+                } else {
+                    let html = '<table class="db-table"><thead><tr><th>Database</th><th>Status</th></tr></thead><tbody>';
+                    data.databases.forEach(db => {
+                        const isCurrent = db === data.current_db;
+                        html += `<tr>
+                                    <td>📁 ${escapeHtml(db)}</td>
+                                    <td>${isCurrent ? '🟢 Current' : ''}</td>
+                                 </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    resultsDiv.innerHTML = html;
+                }
+                rowCountSpan.textContent = `${data.databases.length} database(s)`;
+                
+            } else if (data.type === 'tables') {
+                if (data.tables.length === 0) {
+                    resultsDiv.innerHTML = '<div class="placeholder">No tables found in current database</div>';
+                } else {
+                    let html = '<table class="tables-table"><thead><tr><th>Table Name</th></tr></thead><tbody>';
+                    data.tables.forEach(table => {
+                        html += `<tr><td>📋 ${escapeHtml(table)}</td></tr>`;
+                    });
+                    html += '</tbody></table>';
+                    resultsDiv.innerHTML = html;
+                }
+                rowCountSpan.textContent = `${data.tables.length} table(s)`;
+                
+            } else {
+                resultsDiv.innerHTML = `<div class="error-container">
+                    <div class="error-message">❌ Unexpected response format</div>
+                </div>`;
+                console.error('Unexpected response:', data);
+            }
+        }
+
+        function showError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div class="error-container">
+                    <div class="error-header">
+                        <span class="error-icon">❌</span>
+                        <span class="error-type">Error</span>
+                    </div>
+                    <div class="error-message">${escapeHtml(message)}</div>
+                </div>
+            `;
+            document.getElementById('rowCount').textContent = '';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function addToHistory(query) {
+            queryHistory.unshift(query);
+            if (queryHistory.length > 10) queryHistory.pop();
+            updateHistoryDisplay();
+        }
+
+        function updateHistoryDisplay() {
+            const historyList = document.getElementById('historyList');
+            if (queryHistory.length === 0) {
+                historyList.innerHTML = '<li class="placeholder">No queries executed yet</li>';
+                return;
+            }
+            
+            historyList.innerHTML = queryHistory.map((q, index) => 
+                `<li onclick="executeCommand(${JSON.stringify(q)})" style="cursor:pointer;">
+                    <span class="history-query">${escapeHtml(q.substring(0, 60))}${q.length > 60 ? '...' : ''}</span>
+                 </li>`
+            ).join('');
+        }
+
+        function clearHistory() {
+            queryHistory = [];
+            updateHistoryDisplay();
+        }
+
+        async function refreshSidebar() {
+            try {
+                // Refresh databases
+                const dbResponse = await fetch('/api/databases');
+                const dbData = await dbResponse.json();
+                
+                const dbList = document.getElementById('databaseList');
+                if (dbData.databases && dbData.databases.length > 0) {
+                    dbList.innerHTML = dbData.databases.map(db => 
+                        `<li class="${db === dbData.current_db ? 'active' : ''}">📁 ${escapeHtml(db)}</li>`
+                    ).join('');
+                } else {
+                    dbList.innerHTML = '<li class="placeholder">No databases</li>';
+                }
+                
+                document.getElementById('currentDb').textContent = dbData.current_db || 'None';
+                
+                // Refresh tables if database is selected
+                if (dbData.current_db) {
+                    const tableResponse = await fetch('/api/tables');
+                    const tableData = await tableResponse.json();
+                    
+                    const tableList = document.getElementById('tableList');
+                    if (tableData.tables && tableData.tables.length > 0) {
+                        tableList.innerHTML = tableData.tables.map(table => `<li>📋 ${escapeHtml(table)}</li>`).join('');
+                    } else {
+                        tableList.innerHTML = '<li class="placeholder">No tables</li>';
+                    }
+                } else {
+                    const tableList = document.getElementById('tableList');
+                    tableList.innerHTML = '<li class="placeholder">No database selected</li>';
+                }
+            } catch (error) {
+                console.error('Error refreshing sidebar:', error);
+                const dbList = document.getElementById('databaseList');
+                dbList.innerHTML = '<li class="placeholder">Error loading databases</li>';
+            }
+        }
+
+        async function resetSession() {
+            if (confirm('Reset will clear all results and history. Continue?')) {
+                queryHistory = [];
+                updateHistoryDisplay();
+                document.getElementById('queryInput').value = '';
+                document.getElementById('results').innerHTML = '<div class="placeholder">Execute a query to see results</div>';
+                document.getElementById('rowCount').textContent = '';
+                await refreshSidebar();
+            }
+        }
+
+        // Make executeCommand available globally for onclick handlers
+        window.executeCommand = executeCommand;
+    </script>
 </body>
 </html>
