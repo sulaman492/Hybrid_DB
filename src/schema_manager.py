@@ -50,6 +50,15 @@ class SchemaManager:
                     "foreign_keys": fk,
                     "checks": checks
                 }
+                
+    def get_referencing_tables(self, target_table):
+        """Returns a list of tuples (table_name, foreign_key_col) that reference the target_table"""
+        referencing = []
+        for table_name, schema in self.tables.items():
+            for fk in schema.get("foreign_keys", []):
+                if fk["ref_table"] == target_table:
+                    referencing.append((table_name, fk["column"]))
+        return referencing
     
     # ========== DATABASE METHODS ==========
     def parse_create_database(self, query):

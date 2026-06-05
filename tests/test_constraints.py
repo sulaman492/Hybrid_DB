@@ -175,5 +175,48 @@ class TestConstraintsAndAutoIncrement(unittest.TestCase):
         self.assertEqual(result[0]["role"], "user")
         self.assertEqual(result[0]["score"], 85)
 
+    def test_foreign_key(self):
+        """Test FOREIGN KEY constraints on INSERT, UPDATE, and DELETE."""
+        # Create referenced table
+        success, msg = self.db.execute_create_table(
+            "CREATE TABLE departments (id INT PRIMARY KEY, name TEXT)"
+        )
+        self.assertTrue(success)
+        self.db.execute_insert("INSERT INTO departments VALUES ('Engineering')")
+        self.db.execute_insert("INSERT INTO departments VALUES ('HR')")
+
+        # Create referencing table
+        success, msg = self.db.execute_create_table(
+            "CREATE TABLE employees (id INT PRIMARY KEY, name TEXT, dept_id INT, FOREIGN KEY (dept_id) REFERENCES departments (id))"
+        )
+        self.assertTrue(success)
+
+        # 1. Valid insert
+        success, msg = self.db.execute_insert("INSERT INTO employees VALUES ('Alice', 1)")
+        self.assertTrue(success)
+
+        # 2. Invalid insert (foreign key constraint violated)
+        success, msg = self.db.execute_insert("INSERT INTO employees VALUES ('Bob', 99)")
+        self.assertFalse(success)
+        self.assertIn("Foreign key constraint violated", msg)
+
+        # 3. Valid update
+        success, msg = self.db.execute_update("UPDATE employees SET dept_id = 2 WHERE id = 1")
+        self.assertTrue(success)
+
+        # 4. Invalid update (foreign key constraint violated)
+        success, msg = self.db.execute_update("UPDATE employees SET dept_id = 99 WHERE id = 1")
+        self.assertFalse(success)
+        self.assertIn("Foreign key constraint violated", msg)
+
+        # 5. Invalid delete on referenced table (ON DELETE RESTRICT)
+        success, msg = self.db.execute_delete("DELETE FROM departments WHERE id = 2")
+        self.assertFalse(success)
+        self.assertIn("Foreign key constraint violated", msg)
+
+        # 6. Valid delete on referenced table (no references)
+        success, msg = self.db.execute_delete("DELETE FROM departments WHERE id = 1")
+        self.assertTrue(success)
+
 if __name__ == "__main__":
     unittest.main()

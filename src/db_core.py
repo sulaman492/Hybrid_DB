@@ -133,6 +133,22 @@ class DBCore:
             if not self.parser.evaluate_where(row_dict, check):
                 return False, f"Check constraint violated: {check}"
 
+        # Evaluate FOREIGN KEY constraints
+        foreign_keys = schema.get("foreign_keys", [])
+        for fk in foreign_keys:
+            fk_col = fk["column"]
+            ref_table = fk["ref_table"]
+            ref_col = fk["ref_column"]
+            
+            val = row_dict.get(fk_col)
+            if val is not None and val != "":
+                ref_rows = self.storage_manager.load_rows(current_db, ref_table)
+                if ref_rows is None:
+                    return False, f"Foreign key constraint violated: referenced table '{ref_table}' does not exist"
+                exists = any(r.get(ref_col) == val for r in ref_rows)
+                if not exists:
+                    return False, f"Foreign key constraint violated: value '{val}' not found in {ref_table}({ref_col})"
+
         self.storage_manager.insert_row(current_db, table_name, values)
         
         for i, col in enumerate(schema["columns"]):
@@ -162,6 +178,27 @@ class DBCore:
         
         if not rows:
             return True, f"No rows to delete from '{table_name}'"
+        
+        # Enforce ON DELETE RESTRICT for foreign keys pointing to this table
+        referencing = self.schema_manager.get_referencing_tables(table_name)
+        if referencing:
+            for row in rows:
+                if where_condition and not self.parser.evaluate_where(row, where_condition):
+                    continue
+                # This row is going to be deleted
+                for ref_t, ref_c in referencing:
+                    ref_schema = self.schema_manager.get_table_schema(ref_t)
+                    if not ref_schema: continue
+                    fk_def = next((f for f in ref_schema.get("foreign_keys", []) if f["ref_table"] == table_name), None)
+                    if not fk_def: continue
+                    
+                    target_col = fk_def["ref_column"]
+                    target_val = row.get(target_col)
+                    
+                    ref_rows = self.storage_manager.load_rows(current_db, ref_t)
+                    if ref_rows:
+                        if any(r.get(ref_c) == target_val for r in ref_rows):
+                            return False, f"Foreign key constraint violated: row in '{table_name}' is referenced by '{ref_t}({ref_c})'"
         
         # Filter rows to keep
         rows_to_keep = []
@@ -251,6 +288,19 @@ class DBCore:
             # But we evaluate WHERE later. For now, if updating to a unique value, check if it's already there in ANY row that won't be updated.
             # Actually, if we update MULTIPLE rows to the same value and it's UNIQUE, it'll fail. 
             pass  # We will do UNIQUE check during the row update loop instead.
+
+        # Evaluate FOREIGN KEY constraints for updated column
+        foreign_keys = schema.get("foreign_keys", [])
+        for fk in foreign_keys:
+            if fk["column"] == set_column and set_value is not None and set_value != "":
+                ref_table = fk["ref_table"]
+                ref_col = fk["ref_column"]
+                ref_rows = self.storage_manager.load_rows(current_db, ref_table)
+                if ref_rows is None:
+                    return False, f"Foreign key constraint violated: referenced table '{ref_table}' does not exist"
+                exists = any(r.get(ref_col) == set_value for r in ref_rows)
+                if not exists:
+                    return False, f"Foreign key constraint violated: value '{set_value}' not found in {ref_table}({ref_col})"
 
         # Evaluate CHECK and UNIQUE constraints on simulated updates
         checks = schema.get("checks", [])
