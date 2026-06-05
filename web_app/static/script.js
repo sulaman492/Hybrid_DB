@@ -33,6 +33,13 @@ document.addEventListener('DOMContentLoaded', function() {
             executeCommand(`SELECT * FROM ${tableName};`);
         }
     });
+
+    document.getElementById('viewList')?.addEventListener('click', (e) => {
+        if (e.target.tagName === 'LI') {
+            const viewName = e.target.textContent;
+            executeCommand(`SELECT * FROM ${viewName};`);
+        }
+    });
 });
 
 async function executeQuery() {
@@ -75,7 +82,9 @@ async function executeCommand(query) {
         }
         
         if (query.toUpperCase().includes('CREATE TABLE') || 
-            query.toUpperCase().includes('DROP TABLE')) {
+            query.toUpperCase().includes('DROP TABLE') ||
+            query.toUpperCase().includes('CREATE VIEW') ||
+            query.toUpperCase().includes('CREATE TRIGGER')) {
             refreshTables();
         }
         
@@ -230,10 +239,28 @@ async function refreshTables() {
         const data = await response.json();
         
         const tableList = document.getElementById('tableList');
-        if (data.tables.length === 0) {
+        if (data.tables && data.tables.length === 0) {
             tableList.innerHTML = '<li class="placeholder">No tables</li>';
-        } else {
+        } else if (data.tables) {
             tableList.innerHTML = data.tables.map(table => `<li>${table}</li>`).join('');
+        }
+
+        const viewList = document.getElementById('viewList');
+        if (viewList) {
+            if (!data.views || data.views.length === 0) {
+                viewList.innerHTML = '<li class="placeholder">No views</li>';
+            } else {
+                viewList.innerHTML = data.views.map(view => `<li>${view}</li>`).join('');
+            }
+        }
+
+        const triggerList = document.getElementById('triggerList');
+        if (triggerList) {
+            if (!data.triggers || data.triggers.length === 0) {
+                triggerList.innerHTML = '<li class="placeholder">No triggers</li>';
+            } else {
+                triggerList.innerHTML = data.triggers.map(t => `<li title="ON ${t.table} ${t.event} ${t.action}">${t.name}</li>`).join('');
+            }
         }
     } catch (error) {
         console.error('Error refreshing tables:', error);

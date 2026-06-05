@@ -1,4 +1,0 @@
-# Column: dept_id Type: INT
-1
-1
-1

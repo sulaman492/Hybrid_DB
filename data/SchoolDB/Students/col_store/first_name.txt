@@ -1,5 +1,0 @@
-# Column: first_name Type: STRING
-John
-Emma
-Michael
-Michaedsdl

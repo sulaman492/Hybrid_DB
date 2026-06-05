@@ -5,7 +5,7 @@ class QueryParser:
     def parse_insert(query):
         """Parse INSERT INTO query"""
         pattern = r"INSERT INTO (\w+)\s*VALUES\s*\((.*)\)\s*;?"
-        match = re.match(pattern, query, re.IGNORECASE)
+        match = re.match(pattern, query, re.IGNORECASE | re.DOTALL)
         
         if not match:
             return None, None
@@ -16,6 +16,23 @@ class QueryParser:
         values = []
         for val in values_str.split(','):
             val = val.strip()
+            
+            # Handle string concatenation `||`
+            if "||" in val:
+                parts = val.split("||")
+                concat_val = ""
+                for p in parts:
+                    p = p.strip()
+                    if p.startswith("'") and p.endswith("'"):
+                        concat_val += p[1:-1]
+                    elif p.startswith('"') and p.endswith('"'):
+                        concat_val += p[1:-1]
+                    elif p.upper() == "NULL":
+                        pass
+                    else:
+                        concat_val += p
+                values.append(concat_val)
+                continue
             if val.upper() == "NULL":
                 values.append(None)
             else:
@@ -75,7 +92,7 @@ class QueryParser:
         # Pattern for SELECT with JOIN
         # SELECT * FROM table1 JOIN table2 ON table1.col = table2.col WHERE condition
         join_pattern = r"SELECT\s+(DISTINCT\s+)?(\*|\w+)\s+FROM\s+(\w+)\s+(INNER|LEFT)\s+JOIN\s+(\w+)\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)(?:\s+WHERE\s+(.+))?\s*;?"
-        join_match = re.match(join_pattern, query_clean, re.IGNORECASE)
+        join_match = re.match(join_pattern, query_clean, re.IGNORECASE | re.DOTALL)
         
         if join_match:
             distinct_flag = join_match.group(1) is not None
@@ -111,7 +128,7 @@ class QueryParser:
         
         # Pattern for regular SELECT with WHERE — supports multi-column: SELECT col1, col2 FROM t
         reg_pattern = r"SELECT\s+(DISTINCT\s+)?(\*|(?:\w+)(?:\s*,\s*\w+)*)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+?))?\s*;?\s*$"
-        reg_match = re.match(reg_pattern, query_clean, re.IGNORECASE)
+        reg_match = re.match(reg_pattern, query_clean, re.IGNORECASE | re.DOTALL)
         
         if reg_match:
             distinct_flag = reg_match.group(1) is not None
@@ -142,7 +159,7 @@ class QueryParser:
         
         # Aggregation patterns — now supports optional WHERE clause and optional group column
         agg_pattern = r"SELECT\s+(?:([\w.]+)\s*,\s*)?(AVG|SUM|COUNT|MAX|MIN)\s*\(\s*(\w+|\*)\s*\)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+?))?\s*;?\s*$"
-        agg_match = re.match(agg_pattern, query_clean, re.IGNORECASE)
+        agg_match = re.match(agg_pattern, query_clean, re.IGNORECASE | re.DOTALL)
         if agg_match:
             return {
                 "type": "aggregation",
@@ -164,7 +181,7 @@ class QueryParser:
     def parse_delete(query):
         """Parse DELETE FROM table (with or without WHERE)"""
         pattern = r"DELETE\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+))?\s*;?"
-        match = re.match(pattern, query, re.IGNORECASE)
+        match = re.match(pattern, query, re.IGNORECASE | re.DOTALL)
         
         if not match:
             return None, None
@@ -178,7 +195,7 @@ class QueryParser:
         """Parse UPDATE table SET column = value WHERE condition"""
         # Try with WHERE clause first
         pattern_with_where = r"UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*(.+?)\s+WHERE\s+(.+?)\s*;?\s*$"
-        match = re.match(pattern_with_where, query, re.IGNORECASE)
+        match = re.match(pattern_with_where, query, re.IGNORECASE | re.DOTALL)
         
         if match:
             table_name = match.group(1)
@@ -188,7 +205,7 @@ class QueryParser:
         else:
             # No WHERE clause — update all rows
             pattern_no_where = r"UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*(.+?)\s*;?\s*$"
-            match = re.match(pattern_no_where, query, re.IGNORECASE)
+            match = re.match(pattern_no_where, query, re.IGNORECASE | re.DOTALL)
             
             if not match:
                 return None, None, None, None
@@ -424,7 +441,7 @@ class QueryParser:
         """Parse CREATE TRIGGER query
         Example: CREATE TRIGGER trigger_name BEFORE INSERT ON table_name BEGIN query END
         """
-        pattern = r"CREATE\s+TRIGGER\s+(\w+)\s+(BEFORE|AFTER)\s+(INSERT|UPDATE|DELETE)\s+ON\s+(\w+)\s+BEGIN\s+(.+?)\s+END\s*;?"
+        pattern = r"CREATE\s+TRIGGER\s+(\w+)\s+(BEFORE|AFTER)\s+(INSERT|UPDATE|DELETE)\s+ON\s+(\w+)\s+BEGIN\s+(.+?)\s*END\s*;?"
         match = re.match(pattern, query, re.IGNORECASE | re.DOTALL)
         
         if not match:
@@ -437,3 +454,26 @@ class QueryParser:
             "table": match.group(4),
             "query": match.group(5).strip()
         }
+    @staticmethod
+    def parse_drop_table(query):
+        """Parse DROP TABLE query"""
+        pattern = r"DROP\s+TABLE\s+(\w+)\s*;?"
+        match = re.match(pattern, query, re.IGNORECASE)
+        
+        if not match:
+            return None
+        
+        table_name = match.group(1)
+        return table_name
+    
+    @staticmethod
+    def parse_drop_database(query):
+        """Parse DROP DATABASE query"""
+        pattern = r"DROP\s+DATABASE\s+(\w+)\s*;?"
+        match = re.match(pattern, query, re.IGNORECASE)
+        
+        if not match:
+            return None
+        
+        db_name = match.group(1)
+        return db_name

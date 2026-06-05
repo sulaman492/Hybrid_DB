@@ -1,5 +1,0 @@
-# Column: gender Type: STRING
-M
-F
-M
-M

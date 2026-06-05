@@ -1,3 +1,0 @@
-[{'name': 'dept_id', 'type': 'INT'}, {'name': 'dept_name', 'type': 'STRING'}, {'name': 'location', 'type': 'STRING'}, {'name': 'budget', 'type': 'INT'}]
-['dept_id']
-[]

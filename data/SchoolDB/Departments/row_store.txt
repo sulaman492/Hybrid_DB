@@ -1,3 +1,0 @@
-dept_id,dept_name,building,budget
-1,ComputerScience,BuildingA,500000
-2,Mathematics,BuildingB,300000

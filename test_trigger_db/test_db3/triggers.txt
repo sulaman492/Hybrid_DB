@@ -1,0 +1,1 @@
+{"name": "student_insert_audit", "table": "Students", "event": "AFTER", "action": "INSERT", "query": "INSERT INTO AuditLog VALUES(1,'INSERT','Students',NULL,NEW.student_id||' '||NEW.first_name||' '||NEW.last_name,'2024-01-01');"}

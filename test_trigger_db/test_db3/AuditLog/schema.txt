@@ -1,0 +1,4 @@
+[{'name': 'id', 'type': 'INT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'act', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'tbl', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'col', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'val', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'dt', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}]
+[]
+[]
+[]

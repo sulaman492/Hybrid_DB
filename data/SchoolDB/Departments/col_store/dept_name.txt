@@ -1,3 +1,0 @@
-# Column: dept_name Type: STRING
-ComputerScience
-Mathematics

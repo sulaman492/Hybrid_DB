@@ -1,3 +1,5 @@
+import os
+import re
 from .schema_manager import SchemaManager
 from .storage_manager import StorageManager
 from .query_parser import QueryParser
@@ -51,7 +53,7 @@ class DBCore:
         """Execute CREATE TRIGGER"""
         return self.schema_manager.parse_create_trigger(query, self.parser)
         
-    def _execute_triggers(self, table_name, event, action):
+    def _execute_triggers(self, table_name, event, action, new_row=None, old_row=None):
         """Execute triggers for a given table, event (BEFORE/AFTER), and action (INSERT/UPDATE/DELETE)"""
         current_db = self.schema_manager.get_current_db()
         if not current_db or not self.schema_manager.metadata:
@@ -62,6 +64,16 @@ class DBCore:
             if t["event"] == event and t["action"] == action:
                 # Execute the trigger query
                 query = t["query"]
+                
+                # Replace NEW.* and OLD.* variables
+                if new_row:
+                    for col, val in new_row.items():
+                        rep = f"'{val}'" if isinstance(val, str) else ("NULL" if val is None else str(val))
+                        query = re.sub(fr"\bNEW\.{col}\b", rep, query, flags=re.IGNORECASE)
+                if old_row:
+                    for col, val in old_row.items():
+                        rep = f"'{val}'" if isinstance(val, str) else ("NULL" if val is None else str(val))
+                        query = re.sub(fr"\bOLD\.{col}\b", rep, query, flags=re.IGNORECASE)
                 
                 # Try executing the query by determining its type
                 q_upper = query.upper()
@@ -107,21 +119,23 @@ class DBCore:
         
         if autoincrement_idx != -1:
             if len(values) == expected_count:
-                return False, f"Expected {expected_count - 1} values (excluding AUTOINCREMENT column '{autoincrement_col}'), got {len(values)}"
-            elif len(values) != expected_count - 1:
-                return False, f"Expected {expected_count - 1} values (excluding AUTOINCREMENT column '{autoincrement_col}'), got {len(values)}"
-            
-            # Load existing rows for autoincrement calculation
-            rows = self.storage_manager.load_rows(current_db, table_name)
-            
-            if not rows:
-                next_id = 1
-            else:
-                existing_ids = [r.get(autoincrement_col) for r in rows if r.get(autoincrement_col) is not None]
-                next_id = max(existing_ids) + 1 if existing_ids else 1
+                # User provided all columns including AUTOINCREMENT — use as-is
+                # (common from triggers or explicit inserts)
+                rows = self.storage_manager.load_rows(current_db, table_name)
+            elif len(values) == expected_count - 1:
+                # User omitted AUTOINCREMENT column — auto-generate the ID
+                rows = self.storage_manager.load_rows(current_db, table_name)
                 
-            # Insert the next_id into the values list at the correct index
-            values.insert(autoincrement_idx, next_id)
+                if not rows:
+                    next_id = 1
+                else:
+                    existing_ids = [r.get(autoincrement_col) for r in rows if r.get(autoincrement_col) is not None]
+                    next_id = max(existing_ids) + 1 if existing_ids else 1
+                    
+                # Insert the next_id into the values list at the correct index
+                values.insert(autoincrement_idx, next_id)
+            else:
+                return False, f"Expected {expected_count - 1} values (excluding AUTOINCREMENT column '{autoincrement_col}'), got {len(values)}"
         else:
             if len(values) != expected_count:
                 return False, f"Expected {expected_count} values, got {len(values)}"
@@ -186,7 +200,7 @@ class DBCore:
                     return False, f"Foreign key constraint violated: value '{val}' not found in {ref_table}({ref_col})"
 
         # Fire BEFORE INSERT triggers
-        success, msg = self._execute_triggers(table_name, "BEFORE", "INSERT")
+        success, msg = self._execute_triggers(table_name, "BEFORE", "INSERT", new_row=row_dict)
         if not success:
             return False, msg
 
@@ -198,7 +212,7 @@ class DBCore:
             )
         
         # Fire AFTER INSERT triggers
-        success, msg = self._execute_triggers(table_name, "AFTER", "INSERT")
+        success, msg = self._execute_triggers(table_name, "AFTER", "INSERT", new_row=row_dict)
         if not success:
             return False, msg
 
@@ -263,9 +277,11 @@ class DBCore:
             rows_to_keep = []
         
         # Fire BEFORE DELETE triggers
-        success, msg = self._execute_triggers(table_name, "BEFORE", "DELETE")
-        if not success:
-            return False, msg
+        for row in rows_to_keep_temp: # We need to know which rows are actually going to be deleted
+            if not where_condition or self.parser.evaluate_where(row, where_condition):
+                success, msg = self._execute_triggers(table_name, "BEFORE", "DELETE", old_row=row)
+                if not success:
+                    return False, msg
             
         # Rewrite files if any deletions were made
         if deleted_count > 0:
@@ -274,9 +290,11 @@ class DBCore:
             self.storage_manager.rebuild_column_stores(current_db, table_name, rows_to_keep, schema["columns"])
             
         # Fire AFTER DELETE triggers
-        success, msg = self._execute_triggers(table_name, "AFTER", "DELETE")
-        if not success:
-            return False, msg
+        # (This is a simplified approach; ideally we fire for each row deleted)
+        if deleted_count > 0:
+            success, msg = self._execute_triggers(table_name, "AFTER", "DELETE")
+            if not success:
+                return False, msg
             
         return True, f"Deleted {deleted_count} rows from '{table_name}'"
     
@@ -384,9 +402,13 @@ class DBCore:
                     new_values.append(set_value)
 
         # Fire BEFORE UPDATE triggers
-        success, msg = self._execute_triggers(table_name, "BEFORE", "UPDATE")
-        if not success:
-            return False, msg
+        for row in rows:
+            if not where_condition or self.parser.evaluate_where(row, where_condition):
+                new_row = row.copy()
+                new_row[set_column] = set_value
+                success, msg = self._execute_triggers(table_name, "BEFORE", "UPDATE", new_row=new_row, old_row=row)
+                if not success:
+                    return False, msg
             
         # Update matching rows
         updated_count = 0
@@ -412,6 +434,7 @@ class DBCore:
             self.storage_manager.rebuild_column_stores(current_db, table_name, rows, schema["columns"])
             
             # Fire AFTER UPDATE triggers
+            # (Simplified: we do not pass individual old/new rows for AFTER triggers here)
             success, msg = self._execute_triggers(table_name, "AFTER", "UPDATE")
             if not success:
                 return False, msg
@@ -704,3 +727,109 @@ class DBCore:
             return None, False, f"Unknown aggregation: {agg_func}"
         
         return result, True, None
+    # ========== DROP METHODS ==========
+    def execute_drop_table(self, query):
+        """Execute DROP TABLE"""
+        current_db = self.schema_manager.get_current_db()
+        if not current_db:
+            return False, "No database selected"
+
+        table_name = self.parser.parse_drop_table(query)
+
+        if not table_name:
+            return False, "Invalid DROP TABLE syntax. Use: DROP TABLE table_name;"
+
+        # Check if table exists
+        schema = self.schema_manager.get_table_schema(table_name)
+        if not schema:
+            return False, f"Table '{table_name}' not found in database '{current_db}'"
+
+        # Check for foreign key dependencies (tables that reference this table)
+        referencing = self.schema_manager.get_referencing_tables(table_name)
+        if referencing:
+            ref_list = ", ".join([f"'{r[0]}'" for r in referencing])
+            return False, f"Cannot drop table '{table_name}' because it is referenced by: {ref_list}. Drop those tables first or remove foreign key constraints."
+
+        # Delete table directory and files
+        import shutil
+        table_dir = os.path.join(self.data_dir, current_db, table_name)
+
+        if os.path.exists(table_dir):
+            shutil.rmtree(table_dir)
+
+        # Remove from metadata
+        self.schema_manager.metadata.remove_table(table_name)
+
+        # Remove from memory
+        if table_name in self.schema_manager.tables:
+            del self.schema_manager.tables[table_name]
+
+        return True, f"Table '{table_name}' dropped successfully"
+
+    def execute_drop_database(self, query):
+        """Execute DROP DATABASE"""
+        import shutil
+
+        db_name = self.parser.parse_drop_database(query)
+
+        if not db_name:
+            return False, "Invalid DROP DATABASE syntax. Use: DROP DATABASE db_name;"
+
+        db_path = os.path.join(self.data_dir, db_name)
+
+        if not os.path.exists(db_path):
+            return False, f"Database '{db_name}' not found"
+
+        # Check if trying to drop current database
+        current_db = self.schema_manager.get_current_db()
+        is_current = (current_db == db_name)
+
+        # Delete database directory
+        shutil.rmtree(db_path)
+
+        # If current database was dropped, clear current_db
+        if is_current:
+            current_db_file = os.path.join(self.data_dir, "current_db.txt")
+            if os.path.exists(current_db_file):
+                os.remove(current_db_file)
+            self.schema_manager.current_db = None
+            self.schema_manager.metadata = None
+            self.schema_manager.tables = {}
+            print(f"\n⚠️ You dropped the current database '{db_name}'")
+            print("   Please use 'CREATE DATABASE' or 'USE DATABASE' to select a database")
+
+        return True, f"Database '{db_name}' dropped successfully"
+    
+    def execute_drop_view(self, view_name):
+        """Execute DROP VIEW"""
+        current_db = self.schema_manager.get_current_db()
+        if not current_db:
+            return False, "No database selected"
+
+        if not self.schema_manager.metadata:
+            return False, "No database selected"
+
+        views = self.schema_manager.metadata.get_views()
+        if view_name not in views:
+            return False, f"View '{view_name}' not found"
+
+        self.schema_manager.metadata.remove_view(view_name)
+        return True, f"View '{view_name}' dropped successfully"
+
+    def execute_drop_trigger(self, trigger_name):
+        """Execute DROP TRIGGER"""
+        current_db = self.schema_manager.get_current_db()
+        if not current_db:
+            return False, "No database selected"
+
+        if not self.schema_manager.metadata:
+            return False, "No database selected"
+
+        triggers = self.schema_manager.metadata.get_all_triggers()
+        trigger_names = [t["name"] for t in triggers]
+
+        if trigger_name not in trigger_names:
+            return False, f"Trigger '{trigger_name}' not found"
+
+        self.schema_manager.metadata.remove_trigger(trigger_name)
+        return True, f"Trigger '{trigger_name}' dropped successfully"

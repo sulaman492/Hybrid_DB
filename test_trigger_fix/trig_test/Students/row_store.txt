@@ -1,0 +1,3 @@
+student_id,first_name,last_name,email,gpa
+1,John,Smith,john@uni.edu,3.8
+2,Alice,Jones,alice@uni.edu,3.9

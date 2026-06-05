@@ -1,0 +1,4 @@
+[{'name': 'student_id', 'type': 'INT', 'autoincrement': True, 'unique': False, 'not_null': False, 'default': None}, {'name': 'first_name', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'last_name', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}]
+['student_id']
+[]
+[]

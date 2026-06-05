@@ -1,4 +1,0 @@
-# Column: phone Type: STRING
-5551001
-5551002
-5551002

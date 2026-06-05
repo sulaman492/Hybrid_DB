@@ -1,0 +1,2 @@
+# Column: col Type: TEXT
+None

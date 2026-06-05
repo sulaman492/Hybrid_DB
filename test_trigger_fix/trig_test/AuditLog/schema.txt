@@ -1,0 +1,4 @@
+[{'name': 'log_id', 'type': 'INT', 'autoincrement': True, 'unique': False, 'not_null': False, 'default': None}, {'name': 'action', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'table_name', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'column_name', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'old_value', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'new_value', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'timestamp', 'type': 'TEXT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}]
+['log_id']
+[]
+[]

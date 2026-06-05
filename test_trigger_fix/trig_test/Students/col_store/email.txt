@@ -1,0 +1,3 @@
+# Column: email Type: TEXT
+john@uni.edu
+alice@uni.edu

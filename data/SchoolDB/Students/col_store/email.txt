@@ -1,5 +1,0 @@
-# Column: email Type: STRING
-john@email.com
-emma@email.com
-michael@email.com
-michaesdsl@email.com

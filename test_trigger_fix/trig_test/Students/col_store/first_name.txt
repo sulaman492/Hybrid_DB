@@ -1,0 +1,3 @@
+# Column: first_name Type: TEXT
+John
+Alice

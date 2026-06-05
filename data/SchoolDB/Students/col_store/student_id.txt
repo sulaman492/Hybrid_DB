@@ -1,5 +1,0 @@
-# Column: student_id Type: INT
-1
-2
-3
-4

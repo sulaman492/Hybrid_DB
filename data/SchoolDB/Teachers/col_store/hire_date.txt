@@ -1,4 +1,0 @@
-# Column: hire_date Type: STRING
-2020-01-10
-2019-03-15
-

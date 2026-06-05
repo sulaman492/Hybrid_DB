@@ -1,0 +1,3 @@
+log_id,action,table_name,column_name,old_value,new_value,timestamp
+1,1,INSERT,Students,None,1 John Smith,2024-01-01
+2,1,INSERT,Students,None,2 Alice Jones,2024-01-01

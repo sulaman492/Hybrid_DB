@@ -1,3 +1,0 @@
-Department
-Employee
-Sales

@@ -1,4 +1,0 @@
-# Column: salary Type: INT
-75000
-82000
-82000

@@ -1,3 +1,12 @@
+import sys
+
+# Force UTF-8 encoding for standard output to avoid emoji crashes on Windows
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
+
 from .db_core import DBCore
 
 class HybridDBConsole:
@@ -42,6 +51,11 @@ class HybridDBConsole:
         print("   SHOW DATABASES - List all databases")
         print("   USE DATABASE db_name - Switch to a database")
         print("   SHOW TABLES - Show tables in current database")
+        print("   CREATE TABLE table_name (col1 TYPE, col2 TYPE) - Create a table")
+        print("   CREATE VIEW view_name AS SELECT ... - Create a view")
+        print("   CREATE TRIGGER name BEFORE/AFTER INSERT/UPDATE/DELETE ON table BEGIN ... END - Create trigger")
+        print("   DROP TABLE table_name - Delete a table")
+        print("   DROP DATABASE db_name - Delete a database")
         print("   SELECT * FROM table_name - Query data")
         print("   SELECT DISTINCT column FROM table_name - Unique values")
         print("   SELECT AVG(column) FROM table_name - Aggregation")
@@ -128,6 +142,22 @@ class HybridDBConsole:
             print(f"{'✅' if success else '❌'} {message}")
             return
         
+        # DROP TABLE
+        if query_upper.startswith("DROP TABLE"):
+            success, message = self.db.execute_drop_table(query)
+            print(f"{'✅' if success else '❌'} {message}")
+            return
+        
+        # DROP DATABASE
+        if query_upper.startswith("DROP DATABASE"):
+            confirm = input(f"⚠️ Are you sure you want to drop database? This will DELETE ALL data. Type 'YES' to confirm: ")
+            if confirm == "YES":
+                success, message = self.db.execute_drop_database(query)
+                print(f"{'✅' if success else '❌'} {message}")
+            else:
+                print("❌ DROP DATABASE cancelled")
+            return
+        
         # DESCRIBE
         if query_upper.startswith("DESCRIBE"):
             parts = query.split()
@@ -155,7 +185,7 @@ class HybridDBConsole:
             success, message = self.db.execute_update(query)
             print(f"{'✅' if success else '❌'} {message}")
             return
-        
+
         # SELECT
         if query_upper.startswith("SELECT"):
             result, success, message = self.db.execute_select(query)
@@ -168,7 +198,7 @@ class HybridDBConsole:
         
         # Unknown command
         print(f"❌ Unknown command: {query}")
-        print("   Available commands: CREATE DATABASE, USE DATABASE, SHOW DATABASES, SHOW TABLES, CREATE TABLE, DESCRIBE, INSERT INTO, DELETE FROM, UPDATE, SELECT, EXIT")
+        print("   Available commands: CREATE DATABASE, USE DATABASE, SHOW DATABASES, SHOW TABLES, CREATE TABLE, CREATE VIEW, CREATE TRIGGER, DROP TABLE, DROP DATABASE, DESCRIBE, INSERT INTO, DELETE FROM, UPDATE, SELECT, EXIT")
     
     def display_results(self, result):
         """Display query results"""

@@ -1,4 +1,0 @@
-# Column: first_name Type: STRING
-Robert
-Maria
-Maria

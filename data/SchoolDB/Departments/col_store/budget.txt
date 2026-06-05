@@ -1,3 +1,0 @@
-# Column: budget Type: INT
-500000
-300000

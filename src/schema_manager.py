@@ -181,7 +181,7 @@ class SchemaManager:
             return False, "No database selected. Use: CREATE DATABASE db_name; or USE DATABASE db_name;"
         
         pattern = r"CREATE TABLE (\w+)\s*\((.*)\)\s*;?"
-        match = re.match(pattern, query, re.IGNORECASE)
+        match = re.match(pattern, query, re.IGNORECASE | re.DOTALL)
         
         if not match:
             return False, "Invalid CREATE TABLE syntax. Use: CREATE TABLE table_name (col1 TYPE, col2 TYPE, ...);"
@@ -204,7 +204,7 @@ class SchemaManager:
             
             # Check for standalone CHECK constraint
             if col_def.upper().startswith("CHECK"):
-                check_match = re.search(r"CHECK\s*\((.*)\)", col_def, re.IGNORECASE)
+                check_match = re.search(r"CHECK\s*\((.*)\)", col_def, re.IGNORECASE | re.DOTALL)
                 if check_match:
                     checks.append(check_match.group(1).strip())
                 continue
@@ -228,28 +228,28 @@ class SchemaManager:
                 continue
             
             # Check for inline CHECK constraint
-            inline_check_match = re.search(r"CHECK\s*\((.*?)\)", col_def, re.IGNORECASE)
+            inline_check_match = re.search(r"CHECK\s*\((.*?)\)", col_def, re.IGNORECASE | re.DOTALL)
             if inline_check_match:
                 checks.append(inline_check_match.group(1).strip())
-                col_def = re.sub(r"CHECK\s*\(.*?\)", "", col_def, flags=re.IGNORECASE).strip()
+                col_def = re.sub(r"CHECK\s*\(.*?\)", "", col_def, flags=re.IGNORECASE | re.DOTALL).strip()
 
             # Check for inline AUTOINCREMENT
             autoincrement = False
             if "AUTOINCREMENT" in col_def.upper():
                 autoincrement = True
-                col_def = re.sub(r"\bAUTOINCREMENT\b", "", col_def, flags=re.IGNORECASE).strip()
+                col_def = re.sub(r"\bAUTOINCREMENT\b", "", col_def, flags=re.IGNORECASE | re.DOTALL).strip()
 
             # Check for inline UNIQUE
             unique = False
-            if re.search(r"\bUNIQUE\b", col_def, re.IGNORECASE):
+            if re.search(r"\bUNIQUE\b", col_def, re.IGNORECASE | re.DOTALL):
                 unique = True
-                col_def = re.sub(r"\bUNIQUE\b", "", col_def, flags=re.IGNORECASE).strip()
+                col_def = re.sub(r"\bUNIQUE\b", "", col_def, flags=re.IGNORECASE | re.DOTALL).strip()
 
             # Check for inline NOT NULL
             not_null = False
-            if re.search(r"\bNOT\s+NULL\b", col_def, re.IGNORECASE):
+            if re.search(r"\bNOT\s+NULL\b", col_def, re.IGNORECASE | re.DOTALL):
                 not_null = True
-                col_def = re.sub(r"\bNOT\s+NULL\b", "", col_def, flags=re.IGNORECASE).strip()
+                col_def = re.sub(r"\bNOT\s+NULL\b", "", col_def, flags=re.IGNORECASE | re.DOTALL).strip()
 
             # Check for inline DEFAULT
             default_val = None
@@ -436,3 +436,20 @@ class SchemaManager:
             constraint_str = ", ".join(constraints) if constraints else "-"
             print(f"{col['name']:<15} {col['type']:<10} {constraint_str:<40}")
         print("-" * 70)
+
+    def get_referencing_tables(self, target_table):
+        """Returns a list of tuples (table_name, foreign_key_col) that reference the target_table"""
+        referencing = []
+        for table_name, schema in self.tables.items():
+            for fk in schema.get("foreign_keys", []):
+                if fk["ref_table"] == target_table:
+                    referencing.append((table_name, fk["column"]))
+        return referencing
+    def remove_table(self, table_name):
+        """Remove table from metadata"""
+        tables = self.get_all_tables()
+        tables = [t for t in tables if t != table_name]
+        
+        with open(self.tables_file, "w") as f:
+            for t in tables:
+                f.write(t + "\n")

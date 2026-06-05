@@ -1,0 +1,2 @@
+id,act,tbl,col,val,dt
+1,INSERT,Students,None,1 Alice Smith,2024-01-01

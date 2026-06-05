@@ -1,5 +1,0 @@
-# Column: last_name Type: STRING
-Smith
-Johnson
-Brown
-Brdsdown

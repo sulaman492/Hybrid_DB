@@ -1,3 +1,0 @@
-# Column: building Type: STRING
-BuildingA
-BuildingB
