@@ -115,6 +115,18 @@ class HybridDBConsole:
             success, message = self.db.execute_create_table(query)
             print(f"{'✅' if success else '❌'} {message}")
             return
+            
+        # CREATE VIEW
+        if query_upper.startswith("CREATE VIEW"):
+            success, message = self.db.execute_create_view(query)
+            print(f"{'✅' if success else '❌'} {message}")
+            return
+            
+        # CREATE TRIGGER
+        if query_upper.startswith("CREATE TRIGGER"):
+            success, message = self.db.execute_create_trigger(query)
+            print(f"{'✅' if success else '❌'} {message}")
+            return
         
         # DESCRIBE
         if query_upper.startswith("DESCRIBE"):

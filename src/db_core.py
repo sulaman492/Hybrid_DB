@@ -42,6 +42,42 @@ class DBCore:
         """Describe table schema"""
         self.schema_manager.display_schema(table_name)
     
+    # ========== VIEWS AND TRIGGERS METHODS ==========
+    def execute_create_view(self, query):
+        """Execute CREATE VIEW"""
+        return self.schema_manager.parse_create_view(query, self.parser)
+        
+    def execute_create_trigger(self, query):
+        """Execute CREATE TRIGGER"""
+        return self.schema_manager.parse_create_trigger(query, self.parser)
+        
+    def _execute_triggers(self, table_name, event, action):
+        """Execute triggers for a given table, event (BEFORE/AFTER), and action (INSERT/UPDATE/DELETE)"""
+        current_db = self.schema_manager.get_current_db()
+        if not current_db or not self.schema_manager.metadata:
+            return True, ""
+            
+        triggers = self.schema_manager.metadata.get_triggers(table_name)
+        for t in triggers:
+            if t["event"] == event and t["action"] == action:
+                # Execute the trigger query
+                query = t["query"]
+                
+                # Try executing the query by determining its type
+                q_upper = query.upper()
+                if q_upper.startswith("INSERT INTO"):
+                    success, msg = self.execute_insert(query)
+                elif q_upper.startswith("UPDATE "):
+                    success, msg = self.execute_update(query)
+                elif q_upper.startswith("DELETE FROM"):
+                    success, msg = self.execute_delete(query)
+                else:
+                    success, msg = False, "Unsupported trigger query type"
+                    
+                if not success:
+                    return False, f"Trigger '{t['name']}' failed: {msg}"
+        return True, ""
+
     # ========== DATA METHODS ==========
     def execute_insert(self, query):
         """Execute INSERT INTO"""
@@ -149,6 +185,11 @@ class DBCore:
                 if not exists:
                     return False, f"Foreign key constraint violated: value '{val}' not found in {ref_table}({ref_col})"
 
+        # Fire BEFORE INSERT triggers
+        success, msg = self._execute_triggers(table_name, "BEFORE", "INSERT")
+        if not success:
+            return False, msg
+
         self.storage_manager.insert_row(current_db, table_name, values)
         
         for i, col in enumerate(schema["columns"]):
@@ -156,6 +197,11 @@ class DBCore:
                 current_db, table_name, col["name"], values[i]
             )
         
+        # Fire AFTER INSERT triggers
+        success, msg = self._execute_triggers(table_name, "AFTER", "INSERT")
+        if not success:
+            return False, msg
+
         return True, f"Inserted into '{table_name}'"
     
     def execute_delete(self, query):
@@ -216,17 +262,23 @@ class DBCore:
             deleted_count = len(rows)
             rows_to_keep = []
         
-        # Rewrite the file if any rows were deleted
-        if deleted_count > 0:
-            self.storage_manager.rewrite_rows(current_db, table_name, rows_to_keep, schema["columns"])
-            # Also update column store
-            for col in schema["columns"]:
-                col_values = [str(row[col["name"]]) for row in rows_to_keep]
-                self.storage_manager.rewrite_column(current_db, table_name, col["name"], col_values)
+        # Fire BEFORE DELETE triggers
+        success, msg = self._execute_triggers(table_name, "BEFORE", "DELETE")
+        if not success:
+            return False, msg
             
-            return True, f"Deleted {deleted_count} row(s) from '{table_name}'"
-        else:
-            return True, f"No rows matched the condition. Deleted 0 row(s) from '{table_name}'"
+        # Rewrite files if any deletions were made
+        if deleted_count > 0:
+            self.storage_manager.save_rows(current_db, table_name, rows_to_keep)
+            # Full rewrite of column files
+            self.storage_manager.rebuild_column_stores(current_db, table_name, rows_to_keep, schema["columns"])
+            
+        # Fire AFTER DELETE triggers
+        success, msg = self._execute_triggers(table_name, "AFTER", "DELETE")
+        if not success:
+            return False, msg
+            
+        return True, f"Deleted {deleted_count} rows from '{table_name}'"
     
     def execute_update(self, query):
         """Execute UPDATE with proper WHERE handling"""
@@ -331,6 +383,11 @@ class DBCore:
                                 return False, f"UNIQUE constraint violated: value '{set_value}' already exists in column '{set_column}'"
                     new_values.append(set_value)
 
+        # Fire BEFORE UPDATE triggers
+        success, msg = self._execute_triggers(table_name, "BEFORE", "UPDATE")
+        if not success:
+            return False, msg
+            
         # Update matching rows
         updated_count = 0
         for row in rows:
@@ -350,13 +407,16 @@ class DBCore:
         
         # Rewrite files if any updates were made
         if updated_count > 0:
-            self.storage_manager.rewrite_rows(current_db, table_name, rows, schema["columns"])
-            # Also update column store
-            for col in schema["columns"]:
-                col_values = [str(row[col["name"]]) for row in rows]
-                self.storage_manager.rewrite_column(current_db, table_name, col["name"], col_values)
+            self.storage_manager.save_rows(current_db, table_name, rows)
+            # Full rewrite of column files
+            self.storage_manager.rebuild_column_stores(current_db, table_name, rows, schema["columns"])
             
-            return True, f"Updated {updated_count} row(s) in '{table_name}'"
+            # Fire AFTER UPDATE triggers
+            success, msg = self._execute_triggers(table_name, "AFTER", "UPDATE")
+            if not success:
+                return False, msg
+                
+            return True, f"Updated {updated_count} rows in '{table_name}'"
         else:
             return True, f"No rows matched the condition. Updated 0 row(s) in '{table_name}'"
     
@@ -387,12 +447,9 @@ class DBCore:
             where_condition = parsed["where"]
             is_distinct = parsed["distinct"]
             
-            schema = self.schema_manager.get_table_schema(table_name)
-            if not schema:
-                return None, False, f"Table '{table_name}' not found"
-            
-            # Load rows
-            rows = self.storage_manager.load_rows(current_db, table_name)
+            rows, schema, err = self._get_table_rows_or_view(table_name, current_db)
+            if err:
+                return None, False, err
             
             # Apply WHERE filter
             if where_condition:
@@ -451,6 +508,26 @@ class DBCore:
 
         return result, True, None
     
+    def _get_table_rows_or_view(self, table_name, current_db):
+        """Helper to get rows and schema for a table or evaluate a view"""
+        view_query = self.schema_manager.get_view(table_name)
+        if view_query:
+            rows, success, err = self.execute_select(view_query)
+            if not success:
+                return None, None, f"View execution failed: {err}"
+            
+            schema = {"columns": []}
+            if rows and isinstance(rows[0], dict):
+                for k in rows[0].keys():
+                    schema["columns"].append({"name": k, "type": "ANY"})
+            return rows, schema, None
+        else:
+            schema = self.schema_manager.get_table_schema(table_name)
+            if not schema:
+                return None, None, f"Table/View '{table_name}' not found"
+            rows = self.storage_manager.load_rows(current_db, table_name)
+            return rows, schema, None
+
     def _execute_join(self, parsed, current_db):
         """Execute JOIN query"""
         table1 = parsed["table1"]
@@ -461,14 +538,11 @@ class DBCore:
         where_condition = parsed["where"]
         is_distinct = parsed["distinct"]
         
-        schema1 = self.schema_manager.get_table_schema(table1)
-        schema2 = self.schema_manager.get_table_schema(table2)
+        rows1, schema1, err1 = self._get_table_rows_or_view(table1, current_db)
+        rows2, schema2, err2 = self._get_table_rows_or_view(table2, current_db)
         
-        if not schema1 or not schema2:
-            return None, False, f"Table not found"
-        
-        rows1 = self.storage_manager.load_rows(current_db, table1)
-        rows2 = self.storage_manager.load_rows(current_db, table2)
+        if err1: return None, False, err1
+        if err2: return None, False, err2
         
         result = []
         left_col, right_col = on_condition["left"][1], on_condition["right"][1]

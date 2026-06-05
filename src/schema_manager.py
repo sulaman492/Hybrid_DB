@@ -135,6 +135,45 @@ class SchemaManager:
                         databases.append(item)
         return databases
     
+    # ========== VIEWS METHODS ==========
+    def parse_create_view(self, query, parser):
+        """Parse CREATE VIEW query and save it"""
+        if not self.current_db:
+            return False, "No database selected"
+            
+        view_name, select_query = parser.parse_create_view(query)
+        if not view_name:
+            return False, "Invalid CREATE VIEW syntax. Use: CREATE VIEW name AS SELECT ..."
+            
+        self.metadata.add_view(view_name, select_query)
+        return True, f"View '{view_name}' created successfully"
+        
+    def get_view(self, view_name):
+        """Get a view query by name"""
+        if not self.metadata:
+            return None
+        views = self.metadata.get_views()
+        return views.get(view_name)
+        
+    # ========== TRIGGERS METHODS ==========
+    def parse_create_trigger(self, query, parser):
+        """Parse CREATE TRIGGER query and save it"""
+        if not self.current_db:
+            return False, "No database selected"
+            
+        trigger_def = parser.parse_create_trigger(query)
+        if not trigger_def:
+            return False, "Invalid CREATE TRIGGER syntax."
+            
+        self.metadata.add_trigger(
+            trigger_def["name"], 
+            trigger_def["table"], 
+            trigger_def["event"], 
+            trigger_def["action"], 
+            trigger_def["query"]
+        )
+        return True, f"Trigger '{trigger_def['name']}' created successfully"
+
     # ========== TABLE METHODS ==========
     def parse_create_table(self, query):
         """Parse CREATE TABLE query"""

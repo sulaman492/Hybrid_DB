@@ -402,3 +402,38 @@ class QueryParser:
                 return False
         
         return False
+
+    @staticmethod
+    def parse_create_view(query):
+        """Parse CREATE VIEW query"""
+        pattern = r"CREATE\s+VIEW\s+(\w+)\s+AS\s+(.+)\s*;?"
+        match = re.match(pattern, query, re.IGNORECASE | re.DOTALL)
+        
+        if not match:
+            return None, None
+            
+        view_name = match.group(1)
+        select_query = match.group(2).strip()
+        if select_query.endswith(';'):
+            select_query = select_query[:-1].strip()
+            
+        return view_name, select_query
+
+    @staticmethod
+    def parse_create_trigger(query):
+        """Parse CREATE TRIGGER query
+        Example: CREATE TRIGGER trigger_name BEFORE INSERT ON table_name BEGIN query END
+        """
+        pattern = r"CREATE\s+TRIGGER\s+(\w+)\s+(BEFORE|AFTER)\s+(INSERT|UPDATE|DELETE)\s+ON\s+(\w+)\s+BEGIN\s+(.+?)\s+END\s*;?"
+        match = re.match(pattern, query, re.IGNORECASE | re.DOTALL)
+        
+        if not match:
+            return None
+            
+        return {
+            "name": match.group(1),
+            "event": match.group(2).upper(),
+            "action": match.group(3).upper(),
+            "table": match.group(4),
+            "query": match.group(5).strip()
+        }
