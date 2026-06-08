@@ -1,106 +1,788 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hybrid DBMS - Web Console</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QueryForge — Clay DBMS Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background: #f0ece4;
+    font-family: 'Nunito', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    color: #2e2a24;
+  }
+
+  /* Claymorphism core */
+  .clay-card {
+    background: rgba(250, 247, 242, 0.85);
+    backdrop-filter: blur(2px);
+    border-radius: 20px;
+    box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.05), -3px -3px 8px rgba(255, 255, 255, 0.7), inset 0 1px 0 rgba(255,255,255,0.5);
+  }
+
+  button, .chip, .snippet {
+    transition: all 0.12s ease;
+  }
+  button:active, .chip:active, .snippet:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+  }
+
+  /* Layout */
+  .app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* Header */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 60px;
+    background: #faf7f2;
+    border-bottom: 2px solid #ccc5b8;
+    flex-shrink: 0;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 800;
+    font-size: 18px;
+  }
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: #7a9e87;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 2px solid #3d6b4f;
+    box-shadow: 3px 3px 0 #3d6b4f;
+  }
+  .db-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f5f0e8;
+    padding: 6px 16px;
+    border-radius: 40px;
+    border: 2px solid #ccc5b8;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .db-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #7a9e87;
+    border: 1.5px solid #3d6b4f;
+  }
+  .header-actions { display: flex; gap: 10px; }
+  .btn-sm {
+    background: #faf7f2;
+    border: 2px solid #ccc5b8;
+    border-radius: 12px;
+    padding: 6px 16px;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #b8b0a2;
+  }
+  .btn-sm:hover { background: #e8e2d8; transform: translate(-1px,-1px); box-shadow: 3px 3px 0 #b8b0a2; }
+
+  /* Main Grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: #faf7f2;
+    border-right: 2px solid #ccc5b8;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 16px 12px;
+    gap: 20px;
+  }
+  .section-title {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: #a09890;
+    margin-bottom: 8px;
+    padding-left: 4px;
+  }
+  .db-list, .table-list, .view-list, .trigger-list {
+    list-style: none;
+  }
+  .db-list li, .table-list li, .view-list li, .trigger-list li {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: rgba(245, 240, 232, 0.7);
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.08s linear;
+    border: 2px solid transparent;
+  }
+  .db-list li:hover, .table-list li:hover, .view-list li:hover, .trigger-list li:hover {
+    background: #dfd9ce;
+    transform: translateX(4px);
+  }
+  .db-list li.active {
+    background: #cdddd3;
+    border-color: #7a9e87;
+    color: #2e5a3f;
+    box-shadow: 2px 2px 0 #7a9e87;
+  }
+  .placeholder-item {
+    color: #a09890;
+    font-style: italic;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .info-card {
+    background: #e8e2d8;
+    border-radius: 16px;
+    padding: 12px;
+    margin-top: 8px;
+    font-size: 11px;
+  }
+
+  /* Right Panel */
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .editor-area {
+    background: #faf7f2;
+    border-bottom: 2px solid #ccc5b8;
+    padding: 12px 16px;
+  }
+  .snippet-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .snippet {
+    background: #f5f0e8;
+    border: 2px solid #ccc5b8;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #b8b0a2;
+  }
+  .snippet:hover { background: #cdddd3; transform: translate(-1px,-1px); }
+  textarea {
+    width: 100%;
+    background: #fefcf8;
+    border: 2px solid #ccc5b8;
+    border-radius: 18px;
+    padding: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    resize: vertical;
+    outline: none;
+  }
+  .query-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .btn-run {
+    background: #7a9e87;
+    color: white;
+    border: 2px solid #3d6b4f;
+    border-radius: 30px;
+    padding: 8px 24px;
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 #3d6b4f;
+  }
+  .btn-secondary {
+    background: #e8e2d8;
+    border: 2px solid #b8b0a2;
+    border-radius: 30px;
+    padding: 8px 20px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* Results Pane */
+  .results-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #f0ece4;
+  }
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: #f5f0e8;
+    border-bottom: 2px solid #ccc5b8;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .results-body {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+  }
+  table.result-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fefcf8;
+    border-radius: 16px;
+    border: 2px solid #ccc5b8;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+  table.result-table th {
+    background: #e8e2d8;
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 2px solid #ccc5b8;
+    font-weight: 800;
+  }
+  table.result-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #dfd9ce;
+  }
+  .message-box {
+    background: #cdddd3;
+    border: 2px solid #7a9e87;
+    border-radius: 18px;
+    padding: 16px;
+    font-family: monospace;
+  }
+  .error-box {
+    background: #f5d0d7;
+    border-color: #c46b7a;
+    color: #7a2233;
+  }
+  .success-box {
+    background: #cdddd3;
+    border-color: #7a9e87;
+  }
+  .history-list {
+    list-style: none;
+  }
+  .history-list li {
+    background: #faf7f2;
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    border-radius: 16px;
+    border: 2px solid #ccc5b8;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 12px;
+    transition: 0.05s linear;
+  }
+  .history-list li:hover { background: #dfd9ce; transform: translateX(3px); }
+  .empty-placeholder {
+    color: #a09890;
+    text-align: center;
+    padding: 40px;
+    font-style: italic;
+  }
+  .value-result {
+    background: #e8e2d8;
+    padding: 20px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 24px;
+  }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-card {
+    background: #faf7f2;
+    border: 3px solid #b8b0a2;
+    border-radius: 28px;
+    padding: 28px;
+    width: 380px;
+    box-shadow: 10px 10px 0 rgba(0,0,0,0.1);
+  }
+  .modal-card h3 { margin-bottom: 18px; }
+  .modal-card input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 16px;
+    border: 2px solid #ccc5b8;
+    background: white;
+    margin-bottom: 20px;
+    font-family: monospace;
+  }
+  .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🎓 Hybrid DBMS Console</h1>
-            <p>Row Store + Column Store Database Management System</p>
-        </header>
 
-        <div class="sidebar">
-            <div class="db-info">
-                <h3>Current Database</h3>
-                <div class="current-db" id="currentDb">{{ current_db or 'None' }}</div>
-            </div>
+<div class="app-container">
+  <div class="top-bar">
+    <div class="logo">
+      <div class="logo-icon">◈</div>
+      <span>QueryForge <span style="color:#c97b5a;">ClayDB</span></span>
+    </div>
+    <div class="db-status">
+      <div class="db-dot" id="headerDot"></div>
+      <span id="headerDbName">None</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-sm" onclick="openModal('createDb')">+ Database</button>
+      <button class="btn-sm" onclick="openModal('useDb')">Switch DB</button>
+      <button class="btn-sm" id="resetGlobalBtn">Reset Session</button>
+    </div>
+  </div>
 
-            <div class="db-list">
-                <h3>Databases</h3>
-                <ul id="databaseList">
-                    {% for db in databases %}
-                    <li class="{% if db == current_db %}active{% endif %}">{{ db }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
+  <div class="main-grid">
+    <!-- Sidebar with dynamic lists -->
+    <div class="sidebar">
+      <div>
+        <div class="section-title">🗄️ DATABASES</div>
+        <ul class="db-list" id="databaseList"></ul>
+      </div>
+      <div>
+        <div class="section-title">📋 TABLES</div>
+        <ul class="table-list" id="tableList"></ul>
+      </div>
+      <div>
+        <div class="section-title">👁️ VIEWS</div>
+        <ul class="view-list" id="viewList"></ul>
+      </div>
+      <div>
+        <div class="section-title">⚡ TRIGGERS</div>
+        <ul class="trigger-list" id="triggerList"></ul>
+      </div>
+      <div class="info-card">
+        💡 <strong>Clay Tips</strong><br/>
+        • Semicolon required<br/>
+        • Aggregations → Column Store<br/>
+        • DML → Row Store<br/>
+        • Click tables → SELECT *
+      </div>
+    </div>
 
-            <div class="table-list">
-                <h3>Tables</h3>
-                <ul id="tableList">
-                    {% for table in tables %}
-                    <li>{{ table }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-
-            <div class="table-list">
-                <h3>Views</h3>
-                <ul id="viewList">
-                    {% for view in views %}
-                    <li>{{ view }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-
-            <div class="table-list">
-                <h3>Triggers</h3>
-                <ul id="triggerList">
-                    {% for trigger in triggers %}
-                    <li title="ON {{ trigger.table }} {{ trigger.event }} {{ trigger.action }}">{{ trigger.name }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-
-            <div class="info">
-                <h4>💡 Tips</h4>
-                <ul>
-                    <li>Use semicolon at end of queries</li>
-                    <li>Aggregations use Column Store</li>
-                    <li>INSERT/UPDATE use Row Store</li>
-                </ul>
-            </div>
+    <!-- Right area: Editor + Results + History integrated -->
+    <div class="right-panel">
+      <div class="editor-area">
+        <div class="snippet-bar">
+          <span class="snippet" data-sql="SELECT * FROM ">SELECT *</span>
+          <span class="snippet" data-sql="SELECT AVG(salary) FROM ">AVG(salary)</span>
+          <span class="snippet" data-sql="SELECT dept_id, COUNT(*) FROM  GROUP BY dept_id;">GROUP BY</span>
+          <span class="snippet" data-sql="SHOW TABLES;">SHOW TABLES</span>
+          <span class="snippet" data-sql="CREATE TABLE test (id INT PRIMARY KEY, name TEXT);">CREATE TABLE</span>
+          <span class="snippet" data-sql="INSERT INTO  VALUES (1, 'sample');">INSERT</span>
+          <span class="snippet" data-sql="DESCRIBE ">DESCRIBE</span>
+          <span class="snippet" data-sql="CREATE VIEW sample_view AS SELECT * FROM ">CREATE VIEW</span>
         </div>
-
-        <div class="main">
-            <div class="query-area">
-                <textarea id="queryInput" placeholder="Enter your SQL query here...
-Example:
+        <textarea id="queryInput" rows="3" placeholder="-- Enter SQL query here (Ctrl+Enter to run)
 SELECT * FROM Employee;
 SELECT AVG(salary) FROM Employee;
 SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
-                <div class="query-buttons">
-                    <button id="executeBtn">▶ Execute</button>
-                    <button id="clearBtn">🗑 Clear</button>
-                    <button id="resetBtn">🔄 Reset</button>
-                </div>
-            </div>
-
-            <div class="results-area">
-                <div class="results-header">
-                    <span>Query Results</span>
-                    <span id="rowCount"></span>
-                </div>
-                <div id="results" class="results-content">
-                    <div class="placeholder">Execute a query to see results</div>
-                </div>
-            </div>
-
-            <div class="history-area">
-                <div class="history-header">
-                    <span>Query History</span>
-                    <button id="clearHistoryBtn">Clear</button>
-                </div>
-                <ul id="historyList">
-                    <li class="placeholder">No queries executed yet</li>
-                </ul>
-            </div>
+        <div class="query-actions">
+          <button class="btn-run" id="executeBtn">▶ Execute (Ctrl+Enter)</button>
+          <button class="btn-secondary" id="clearBtn">Clear Editor</button>
         </div>
-    </div>
+      </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+      <div class="results-container">
+        <div class="results-header">
+          <span>📊 Query Results</span>
+          <span id="rowCountSpan"></span>
+        </div>
+        <div class="results-body" id="resultsBody">
+          <div class="empty-placeholder">⚡ Run a query or click table/database</div>
+        </div>
+        <div style="border-top: 2px solid #ccc5b8; background: #f5f0e8; padding: 8px 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span><strong>📜 Recent History (click to reuse)</strong></span>
+            <button class="btn-sm" id="clearHistoryBtn" style="padding: 3px 12px;">Clear History</button>
+          </div>
+          <ul id="historyList" style="max-height: 130px; overflow-y: auto; list-style: none; margin-top: 8px;"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div id="createDbModal" class="modal-overlay">
+  <div class="modal-card">
+    <h3>📁 Create Database</h3>
+    <input type="text" id="newDbName" placeholder="database name" autocomplete="off"/>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeModal('createDb')">Cancel</button>
+      <button class="btn-run" onclick="createDatabase()">Create</button>
+    </div>
+  </div>
+</div>
+<div id="useDbModal" class="modal-overlay">
+  <div class="modal-card">
+    <h3>🔁 Switch Database</h3>
+    <input type="text" id="switchDbInput" placeholder="database name" autocomplete="off"/>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeModal('useDb')">Cancel</button>
+      <button class="btn-run" onclick="useDatabase()">Switch</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- GLOBAL STATE ----------
+  let queryHistory = [];
+
+  // ---------- DOM Elements ----------
+  const executeBtn = document.getElementById('executeBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  const resetGlobalBtn = document.getElementById('resetGlobalBtn');
+  const queryInput = document.getElementById('queryInput');
+  const resultsBody = document.getElementById('resultsBody');
+  const rowCountSpan = document.getElementById('rowCountSpan');
+  const databaseListEl = document.getElementById('databaseList');
+  const tableListEl = document.getElementById('tableList');
+  const viewListEl = document.getElementById('viewList');
+  const triggerListEl = document.getElementById('triggerList');
+  const headerDbName = document.getElementById('headerDbName');
+  const headerDot = document.getElementById('headerDot');
+
+  // ---------- Helper functions ----------
+  function setLoading(loading) {
+    if (loading) {
+      resultsBody.innerHTML = '<div class="empty-placeholder">⏳ Executing query...</div>';
+      rowCountSpan.textContent = '';
+    }
+  }
+
+  function showError(message) {
+    resultsBody.innerHTML = `<div class="message-box error-box">❌ Error: ${escapeHtml(message)}</div>`;
+    rowCountSpan.textContent = '';
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  }
+
+  // Display results from backend
+  function displayResults(data) {
+    if (data.type === 'select') {
+      if (!data.rows || data.rows.length === 0) {
+        resultsBody.innerHTML = '<div class="empty-placeholder">✨ No rows returned</div>';
+        rowCountSpan.textContent = '0 rows';
+        return;
+      }
+      const headers = Object.keys(data.rows[0]);
+      let html = '<table class="result-table"><thead><tr>';
+      headers.forEach(h => html += `<th>${escapeHtml(h)}</th>`);
+      html += '</tr></thead><tbody>';
+      data.rows.forEach(row => {
+        html += '<tr>';
+        headers.forEach(h => {
+          let val = row[h];
+          if (val === undefined || val === null) val = 'NULL';
+          html += `<td>${escapeHtml(String(val))}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      resultsBody.innerHTML = html;
+      rowCountSpan.textContent = `${data.rows.length} row(s)`;
+    } 
+    else if (data.type === 'value') {
+      resultsBody.innerHTML = `<div class="value-result">📈 Result: ${escapeHtml(String(data.value))}</div>`;
+      rowCountSpan.textContent = 'scalar';
+    }
+    else if (data.type === 'message') {
+      const cls = data.success ? 'success-box' : 'error-box';
+      resultsBody.innerHTML = `<div class="message-box ${cls}">${escapeHtml(data.message)}</div>`;
+      rowCountSpan.textContent = '';
+    }
+    else if (data.type === 'schema') {
+      let html = '<table class="result-table"><thead><tr><th>Column</th><th>Type</th></tr></thead><tbody>';
+      (data.columns || []).forEach(col => {
+        html += `<tr><td>${escapeHtml(col.name)}</td><td>${escapeHtml(col.type)}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      resultsBody.innerHTML = html;
+      rowCountSpan.textContent = `${data.columns?.length || 0} column(s)`;
+    }
+    else if (data.type === 'databases') {
+      let html = '<table class="result-table"><thead><tr><th>Database</th><th>Status</th></tr></thead><tbody>';
+      (data.databases || []).forEach(db => {
+        const active = (db === data.current_db);
+        html += `<tr><td>${escapeHtml(db)}</td><td>${active ? '🟢 Current' : ''}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      resultsBody.innerHTML = html;
+      rowCountSpan.textContent = `${data.databases?.length || 0} database(s)`;
+    }
+    else if (data.type === 'tables') {
+      if (!data.tables || data.tables.length === 0) {
+        resultsBody.innerHTML = '<div class="empty-placeholder">📭 No tables in current database</div>';
+      } else {
+        let html = '<table class="result-table"><thead><tr><th>Table Name</th></tr></thead><tbody>';
+        data.tables.forEach(t => html += `<tr><td>📋 ${escapeHtml(t)}</td></tr>`);
+        html += '</tbody></table>';
+        resultsBody.innerHTML = html;
+      }
+      rowCountSpan.textContent = `${data.tables?.length || 0} table(s)`;
+    }
+    else if (data.type === 'error') {
+      showError(data.message);
+    } 
+    else {
+      resultsBody.innerHTML = `<div class="message-box">✅ ${escapeHtml(JSON.stringify(data))}</div>`;
+    }
+  }
+
+  // Core execute command (matching required functionality)
+  async function executeCommand(query) {
+    if (!query.trim()) return;
+    addToHistory(query);
+    setLoading(true);
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query })
+      });
+      const data = await response.json();
+      displayResults(data);
+
+      // Refresh sidebar on DDL / DB changes
+      const upper = query.toUpperCase();
+      if (upper.includes('CREATE DATABASE') || upper.includes('USE DATABASE') || upper.includes('DROP DATABASE')) {
+        await refreshSidebar();
+      }
+      if (upper.includes('CREATE TABLE') || upper.includes('DROP TABLE') || 
+          upper.includes('CREATE VIEW') || upper.includes('DROP VIEW') ||
+          upper.includes('CREATE TRIGGER') || upper.includes('DROP TRIGGER')) {
+        await refreshTables();
+      }
+    } catch (err) {
+      showError(`Connection error: ${err.message}`);
+    }
+  }
+
+  async function executeQuery() {
+    const query = queryInput.value.trim();
+    if (!query) {
+      showError('Please enter a SQL query');
+      return;
+    }
+    await executeCommand(query);
+  }
+
+  // History helpers
+  function addToHistory(query) {
+    queryHistory.unshift(query);
+    if (queryHistory.length > 10) queryHistory.pop();
+    updateHistoryDisplay();
+  }
+
+  function updateHistoryDisplay() {
+    const historyList = document.getElementById('historyList');
+    if (!historyList) return;
+    if (queryHistory.length === 0) {
+      historyList.innerHTML = '<li class="empty-placeholder" style="padding: 8px;">No queries executed yet</li>';
+      return;
+    }
+    historyList.innerHTML = queryHistory.map(q => {
+      const shortQuery = q.length > 55 ? q.substring(0, 52) + '...' : q;
+      const escaped = q.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/`/g, '\\`');
+      return `<li style="cursor:pointer; margin-bottom:6px; background:#faf7f2; border-radius:12px; padding:8px 12px; border:2px solid #ccc5b8;" onclick="executeCommand(\`${q.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">📌 ${escapeHtml(shortQuery)}</li>`;
+    }).join('');
+  }
+
+  function clearHistory() {
+    queryHistory = [];
+    updateHistoryDisplay();
+  }
+
+  // Refresh sidebar: databases and current db
+  async function refreshSidebar() {
+    try {
+      const resp = await fetch('/api/databases');
+      const data = await resp.json();
+      if (databaseListEl) {
+        databaseListEl.innerHTML = (data.databases || []).map(db => 
+          `<li class="${db === data.current_db ? 'active' : ''}" data-db="${escapeHtml(db)}">${escapeHtml(db)}</li>`
+        ).join('');
+        // attach click for use database
+        document.querySelectorAll('#databaseList li').forEach(li => {
+          li.addEventListener('click', () => {
+            const dbName = li.getAttribute('data-db') || li.textContent;
+            executeCommand(`USE DATABASE ${dbName};`);
+          });
+        });
+      }
+      headerDbName.textContent = data.current_db || 'None';
+      headerDot.style.background = data.current_db ? '#7a9e87' : '#ccc5b8';
+      if (data.current_db) await refreshTables();
+      else {
+        if(tableListEl) tableListEl.innerHTML = '<li class="placeholder-item">—</li>';
+        if(viewListEl) viewListEl.innerHTML = '<li class="placeholder-item">—</li>';
+        if(triggerListEl) triggerListEl.innerHTML = '<li class="placeholder-item">—</li>';
+      }
+    } catch(e) { console.warn(e); }
+  }
+
+  async function refreshTables() {
+    try {
+      const resp = await fetch('/api/tables');
+      const data = await resp.json();
+      if (tableListEl) {
+        if (!data.tables || data.tables.length === 0) tableListEl.innerHTML = '<li class="placeholder-item">No tables</li>';
+        else {
+          tableListEl.innerHTML = data.tables.map(t => `<li data-table="${escapeHtml(t)}">📌 ${escapeHtml(t)}</li>`).join('');
+          document.querySelectorAll('#tableList li').forEach(li => {
+            li.addEventListener('click', () => {
+              const tbl = li.getAttribute('data-table') || li.textContent.replace('📌', '').trim();
+              executeCommand(`SELECT * FROM ${tbl};`);
+            });
+          });
+        }
+      }
+      if (viewListEl) {
+        if (!data.views || data.views.length === 0) viewListEl.innerHTML = '<li class="placeholder-item">No views</li>';
+        else {
+          viewListEl.innerHTML = data.views.map(v => `<li data-view="${escapeHtml(v)}">👁️ ${escapeHtml(v)}</li>`).join('');
+          document.querySelectorAll('#viewList li').forEach(li => {
+            li.addEventListener('click', () => {
+              const view = li.getAttribute('data-view') || li.textContent.replace('👁️', '').trim();
+              executeCommand(`SELECT * FROM ${view};`);
+            });
+          });
+        }
+      }
+      if (triggerListEl) {
+        if (!data.triggers || data.triggers.length === 0) triggerListEl.innerHTML = '<li class="placeholder-item">No triggers</li>';
+        else {
+          triggerListEl.innerHTML = data.triggers.map(t => `<li title="ON ${t.table} ${t.event} ${t.action}">⚡ ${escapeHtml(t.name)}</li>`).join('');
+        }
+      }
+    } catch(e) { console.error(e); }
+  }
+
+  async function resetSession() {
+    if (confirm('Reset will clear all results, history and refresh. Continue?')) {
+      queryHistory = [];
+      updateHistoryDisplay();
+      queryInput.value = '';
+      resultsBody.innerHTML = '<div class="empty-placeholder">Session reset. Ready.</div>';
+      rowCountSpan.textContent = '';
+      await refreshSidebar();
+    }
+  }
+
+  // Modal helpers
+  function openModal(type) {
+    document.getElementById(`${type}Modal`).classList.add('open');
+  }
+  function closeModal(type) {
+    document.getElementById(`${type}Modal`).classList.remove('open');
+  }
+  async function createDatabase() {
+    const dbName = document.getElementById('newDbName').value.trim();
+    if (!dbName) return;
+    closeModal('createDb');
+    await executeCommand(`CREATE DATABASE ${dbName};`);
+    document.getElementById('newDbName').value = '';
+    await refreshSidebar();
+  }
+  async function useDatabase() {
+    const dbName = document.getElementById('switchDbInput').value.trim();
+    if (!dbName) return;
+    closeModal('useDb');
+    await executeCommand(`USE DATABASE ${dbName};`);
+    document.getElementById('switchDbInput').value = '';
+    await refreshSidebar();
+  }
+
+  // Snippet insertion
+  function insertSnippet(sql) {
+    const current = queryInput.value;
+    const start = queryInput.selectionStart;
+    const newVal = current.slice(0, start) + sql + current.slice(start);
+    queryInput.value = newVal;
+    queryInput.focus();
+    queryInput.selectionStart = queryInput.selectionEnd = start + sql.length;
+  }
+
+  // Event Binding & initialization
+  document.addEventListener('DOMContentLoaded', () => {
+    executeBtn.addEventListener('click', executeQuery);
+    clearBtn.addEventListener('click', () => { queryInput.value = ''; });
+    clearHistoryBtn.addEventListener('click', clearHistory);
+    resetGlobalBtn.addEventListener('click', resetSession);
+    queryInput.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        executeQuery();
+      }
+    });
+    // snippet clicks
+    document.querySelectorAll('.snippet').forEach(snip => {
+      snip.addEventListener('click', () => {
+        const sql = snip.getAttribute('data-sql') || snip.textContent;
+        insertSnippet(sql + ' ');
+      });
+    });
+    refreshSidebar();
+  });
+
+  // expose globally for onclick handlers
+  window.executeCommand = executeCommand;
+  window.openModal = openModal;
+  window.closeModal = closeModal;
+  window.createDatabase = createDatabase;
+  window.useDatabase = useDatabase;
+  window.insertSnippet = insertSnippet;
+  window.resetSession = resetSession;
+  window.clearHistory = clearHistory;
+</script>
 </body>
 </html>

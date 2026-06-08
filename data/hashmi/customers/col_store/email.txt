@@ -1,0 +1,2 @@
+# Column: email Type: VARCHAR
+alice@example.com

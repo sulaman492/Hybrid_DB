@@ -1,0 +1,2 @@
+# Column: customer_name Type: VARCHAR
+Alice Johnson
