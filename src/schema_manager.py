@@ -228,10 +228,10 @@ class SchemaManager:
                 continue
             
             # Check for inline CHECK constraint
-            inline_check_match = re.search(r"CHECK\s*\((.*?)\)", col_def, re.IGNORECASE | re.DOTALL)
+            inline_check_match = re.search(r"CHECK\s*\((.*)\)", col_def, re.IGNORECASE | re.DOTALL)
             if inline_check_match:
                 checks.append(inline_check_match.group(1).strip())
-                col_def = re.sub(r"CHECK\s*\(.*?\)", "", col_def, flags=re.IGNORECASE | re.DOTALL).strip()
+                col_def = re.sub(r"CHECK\s*\(.*\)", "", col_def, flags=re.IGNORECASE | re.DOTALL).strip()
 
             # Check for inline AUTOINCREMENT
             autoincrement = False

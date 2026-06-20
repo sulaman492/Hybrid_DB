@@ -1,0 +1,4 @@
+[{'name': 'student_id', 'type': 'INT', 'autoincrement': True, 'unique': False, 'not_null': False, 'default': None}, {'name': 'first_name', 'type': 'STRING', 'autoincrement': False, 'unique': False, 'not_null': True, 'default': None}, {'name': 'last_name', 'type': 'STRING', 'autoincrement': False, 'unique': False, 'not_null': True, 'default': None}, {'name': 'email', 'type': 'STRING', 'autoincrement': False, 'unique': True, 'not_null': False, 'default': None}, {'name': 'dept_id', 'type': 'INT', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': None}, {'name': 'status', 'type': 'STRING', 'autoincrement': False, 'unique': False, 'not_null': False, 'default': 'Active'}]
+['student_id']
+[{'column': 'dept_id', 'ref_table': 'Departments', 'ref_column': 'dept_id'}]
+[]

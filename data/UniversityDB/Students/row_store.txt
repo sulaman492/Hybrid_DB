@@ -1,0 +1,4 @@
+student_id,first_name,last_name,email,dept_id,status
+1,John,Smith,john@email.com,1,Active
+2,Emma,Johnson,emma@email.com,1,Active
+3,Michael,Brown,michael@email.com,2,Active

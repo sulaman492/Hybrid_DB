@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 from .schema_manager import SchemaManager
 from .storage_manager import StorageManager
 from .query_parser import QueryParser
@@ -10,6 +11,17 @@ class DBCore:
         self.schema_manager = SchemaManager(data_dir)
         self.storage_manager = StorageManager(data_dir)
         self.parser = QueryParser()
+        
+        # Transaction state
+        self.db_lock = threading.RLock()
+        self.in_transaction = False
+        self.transaction_tables = set()
+        
+        # Auto-recover any orphaned transactions from previous crashes
+        for db_name in os.listdir(data_dir):
+            db_path = os.path.join(data_dir, db_name)
+            if os.path.isdir(db_path) and db_name != "_metadata":
+                self.storage_manager.auto_recover_crashes(db_name)
     
     # ========== DATABASE METHODS ==========
     def execute_create_database(self, query):
@@ -27,10 +39,56 @@ class DBCore:
     def get_current_db(self):
         """Get current database name"""
         return self.schema_manager.get_current_db()
+        
+    # ========== TRANSACTION METHODS ==========
+    def execute_begin(self):
+        """Begin a transaction"""
+        self.in_transaction = True
+        self.transaction_tables = set()
+        return True, "Transaction started"
+        
+    def execute_commit(self):
+        """Commit a transaction"""
+        if not self.in_transaction:
+            return False, "No active transaction to commit"
+            
+        current_db = self.get_current_db()
+        if current_db:
+            self.storage_manager.discard_backups(current_db, self.transaction_tables)
+            
+        self.in_transaction = False
+        self.transaction_tables = set()
+        return True, "Transaction committed"
+        
+    def execute_rollback(self):
+        """Rollback a transaction"""
+        if not self.in_transaction:
+            return False, "No active transaction to rollback"
+            
+        current_db = self.get_current_db()
+        if current_db:
+            self.storage_manager.restore_backups(current_db, self.transaction_tables)
+            # Reload schema cache in case tables were created/dropped
+            self.schema_manager._load_all_schemas()
+            
+        self.in_transaction = False
+        self.transaction_tables = set()
+        return True, "Transaction rolled back"
+        
+    def _ensure_transaction_backup(self, table_name):
+        """Backup table before modification if in a transaction"""
+        if self.in_transaction and table_name not in self.transaction_tables:
+            current_db = self.get_current_db()
+            if current_db:
+                self.storage_manager.backup_table(current_db, table_name)
+                self.transaction_tables.add(table_name)
     
     # ========== TABLE METHODS ==========
     def execute_create_table(self, query):
         """Execute CREATE TABLE"""
+        match = re.search(r"CREATE TABLE (\w+)", query, re.IGNORECASE)
+        if match:
+            self._ensure_transaction_backup(match.group(1))
         return self.schema_manager.parse_create_table(query)
     
     def show_tables(self):
@@ -204,6 +262,9 @@ class DBCore:
         if not success:
             return False, msg
 
+        # Backup before writing
+        self._ensure_transaction_backup(table_name)
+
         self.storage_manager.insert_row(current_db, table_name, values)
         
         for i, col in enumerate(schema["columns"]):
@@ -277,17 +338,23 @@ class DBCore:
             rows_to_keep = []
         
         # Fire BEFORE DELETE triggers
-        for row in rows_to_keep_temp: # We need to know which rows are actually going to be deleted
+        for row in rows: # We need to know which rows are actually going to be deleted
             if not where_condition or self.parser.evaluate_where(row, where_condition):
                 success, msg = self._execute_triggers(table_name, "BEFORE", "DELETE", old_row=row)
                 if not success:
                     return False, msg
             
+        # Perform DELETE
+        self._ensure_transaction_backup(table_name)
+
         # Rewrite files if any deletions were made
         if deleted_count > 0:
-            self.storage_manager.save_rows(current_db, table_name, rows_to_keep)
+            self.storage_manager.rewrite_rows(current_db, table_name, rows_to_keep, schema["columns"])
             # Full rewrite of column files
-            self.storage_manager.rebuild_column_stores(current_db, table_name, rows_to_keep, schema["columns"])
+            for col in schema["columns"]:
+                col_name = col["name"]
+                col_values = [row.get(col_name) for row in rows_to_keep]
+                self.storage_manager.rewrite_column(current_db, table_name, col_name, col_values)
             
         # Fire AFTER DELETE triggers
         # (This is a simplified approach; ideally we fire for each row deleted)
@@ -409,6 +476,9 @@ class DBCore:
                 success, msg = self._execute_triggers(table_name, "BEFORE", "UPDATE", new_row=new_row, old_row=row)
                 if not success:
                     return False, msg
+
+        # Perform UPDATE
+        self._ensure_transaction_backup(table_name)
             
         # Update matching rows
         updated_count = 0
@@ -428,10 +498,14 @@ class DBCore:
                 updated_count += 1
         
         # Rewrite files if any updates were made
+        # Rewrite files if any updates were made
         if updated_count > 0:
-            self.storage_manager.save_rows(current_db, table_name, rows)
+            self.storage_manager.rewrite_rows(current_db, table_name, rows, schema["columns"])
             # Full rewrite of column files
-            self.storage_manager.rebuild_column_stores(current_db, table_name, rows, schema["columns"])
+            for col in schema["columns"]:
+                col_name = col["name"]
+                col_values = [row.get(col_name) for row in rows]
+                self.storage_manager.rewrite_column(current_db, table_name, col_name, col_values)
             
             # Fire AFTER UPDATE triggers
             # (Simplified: we do not pass individual old/new rows for AFTER triggers here)
@@ -605,13 +679,144 @@ class DBCore:
             result = unique
         
         if select_col != "*":
-            if select_col in [col["name"] for col in schema1["columns"]]:
-                result = [row.get(f"{table1}.{select_col}") for row in result]
-            else:
-                result = [row.get(f"{table2}.{select_col}") for row in result]
+            new_result = []
+            cols = select_col if isinstance(select_col, list) else [select_col]
+            for row in result:
+                new_row = {}
+                for col in cols:
+                    if col in row:
+                        new_row[col] = row[col]
+                    else:
+                        # Try to match without table prefix
+                        for k in row.keys():
+                            if k.endswith(f".{col}"):
+                                new_row[k] = row[k]
+                                break
+                new_result.append(new_row)
+            result = new_result
         
         return result, True, None
-    
+    def benchmark_aggregation(self, parsed, current_db):
+        """Run the same aggregation on both column store and row store, return timing comparison."""
+        import time
+        
+        agg_func = parsed["agg_func"]
+        agg_col = parsed["agg_col"]
+        table_name = parsed["table_name"]
+        where_condition = parsed.get("where")
+        group_by = parsed.get("group_by")
+        
+        schema = self.schema_manager.get_table_schema(table_name)
+        if not schema:
+            return None
+        
+        num_columns = len(schema["columns"])
+        all_rows = self.storage_manager.load_rows(current_db, table_name)
+        num_rows = len(all_rows)
+        
+        # ── ROW STORE benchmark ──
+        row_start = time.perf_counter()
+        for _ in range(100):  # Run 100 iterations for more reliable timing
+            rows = self.storage_manager.load_rows(current_db, table_name)
+            if where_condition:
+                filtered = [r for r in rows if self.parser.evaluate_where(r, where_condition)]
+            else:
+                filtered = rows
+            
+            if group_by:
+                groups = {}
+                for r in filtered:
+                    g_val = r.get(group_by)
+                    if g_val not in groups:
+                        groups[g_val] = []
+                    groups[g_val].append(r)
+                for g_val, g_rows in groups.items():
+                    if agg_col == "*":
+                        _ = len(g_rows)
+                    else:
+                        vals = [float(r.get(agg_col, 0)) for r in g_rows if r.get(agg_col) is not None]
+                        if agg_func == "COUNT": _ = len(vals)
+                        elif agg_func == "SUM": _ = sum(vals)
+                        elif agg_func == "AVG": _ = sum(vals) / len(vals) if vals else 0
+                        elif agg_func == "MAX": _ = max(vals) if vals else None
+                        elif agg_func == "MIN": _ = min(vals) if vals else None
+            else:
+                if agg_col == "*":
+                    _ = len(filtered)
+                else:
+                    vals = [float(r.get(agg_col, 0)) for r in filtered if r.get(agg_col) is not None]
+                    if agg_func == "COUNT": _ = len(vals)
+                    elif agg_func == "SUM": _ = sum(vals)
+                    elif agg_func == "AVG": _ = sum(vals) / len(vals) if vals else 0
+                    elif agg_func == "MAX": _ = max(vals) if vals else None
+                    elif agg_func == "MIN": _ = min(vals) if vals else None
+        row_end = time.perf_counter()
+        row_time_ms = ((row_end - row_start) / 100) * 1000  # Average per iteration in ms
+        
+        # ── COLUMN STORE benchmark ──
+        col_start = time.perf_counter()
+        for _ in range(100):
+            if group_by or where_condition:
+                # Column store can't handle WHERE/GROUP BY natively, still loads column
+                if agg_col == "*":
+                    first_col = schema["columns"][0]["name"]
+                    raw = self.storage_manager.load_column(current_db, table_name, first_col)
+                    _ = len(raw)
+                else:
+                    raw = self.storage_manager.load_column(current_db, table_name, agg_col)
+                    vals = [float(v) for v in raw if v is not None]
+                    if agg_func == "COUNT": _ = len(vals)
+                    elif agg_func == "SUM": _ = sum(vals)
+                    elif agg_func == "AVG": _ = sum(vals) / len(vals) if vals else 0
+                    elif agg_func == "MAX": _ = max(vals) if vals else None
+                    elif agg_func == "MIN": _ = min(vals) if vals else None
+            else:
+                if agg_col == "*":
+                    first_col = schema["columns"][0]["name"]
+                    raw = self.storage_manager.load_column(current_db, table_name, first_col)
+                    _ = len(raw)
+                else:
+                    raw = self.storage_manager.load_column(current_db, table_name, agg_col)
+                    vals = [float(v) for v in raw if v is not None]
+                    if agg_func == "COUNT": _ = len(vals)
+                    elif agg_func == "SUM": _ = sum(vals)
+                    elif agg_func == "AVG": _ = sum(vals) / len(vals) if vals else 0
+                    elif agg_func == "MAX": _ = max(vals) if vals else None
+                    elif agg_func == "MIN": _ = min(vals) if vals else None
+        col_end = time.perf_counter()
+        col_time_ms = ((col_end - col_start) / 100) * 1000
+        
+        # Determine which was faster
+        if col_time_ms < row_time_ms:
+            speedup = row_time_ms / col_time_ms if col_time_ms > 0 else 1
+            winner = "column"
+        else:
+            speedup = col_time_ms / row_time_ms if row_time_ms > 0 else 1
+            winner = "row"
+        
+        # What the actual query used
+        if group_by or where_condition:
+            used_store = "row"
+        else:
+            used_store = "column"
+        
+        return {
+            "row_time_ms": round(row_time_ms, 4),
+            "col_time_ms": round(col_time_ms, 4),
+            "winner": winner,
+            "speedup": round(speedup, 2),
+            "used_store": used_store,
+            "agg_func": agg_func,
+            "agg_col": agg_col,
+            "table_name": table_name,
+            "num_rows": num_rows,
+            "num_columns": num_columns,
+            "columns_loaded_row": num_columns,
+            "columns_loaded_col": 1,
+            "has_where": where_condition is not None,
+            "has_group_by": group_by is not None,
+        }
+
     def _execute_aggregation(self, parsed, current_db):
         """Execute aggregation query — uses column store (no WHERE) or row store (with WHERE/GROUP BY)"""
         agg_func = parsed["agg_func"]
@@ -750,6 +955,9 @@ class DBCore:
             ref_list = ", ".join([f"'{r[0]}'" for r in referencing])
             return False, f"Cannot drop table '{table_name}' because it is referenced by: {ref_list}. Drop those tables first or remove foreign key constraints."
 
+        # Backup table before dropping if in transaction
+        self._ensure_transaction_backup(table_name)
+        
         # Delete table directory and files
         import shutil
         table_dir = os.path.join(self.data_dir, current_db, table_name)

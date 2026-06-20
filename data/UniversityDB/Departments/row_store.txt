@@ -1,0 +1,3 @@
+dept_id,dept_name,budget
+1,CS,500000
+2,Math,300000

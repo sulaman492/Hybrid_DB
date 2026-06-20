@@ -1,0 +1,3 @@
+# Column: dept_name Type: STRING
+CS
+Math

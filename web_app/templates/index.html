@@ -208,6 +208,7 @@
     font-size: 13px;
     resize: vertical;
     outline: none;
+    min-height: 120px;
   }
   .query-actions {
     display: flex;
@@ -350,6 +351,135 @@
     font-family: monospace;
   }
   .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+  /* ── Performance Dashboard ── */
+  .perf-dashboard {
+    margin-top: 16px;
+    background: #faf7f2;
+    border: 2px solid #ccc5b8;
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.05);
+  }
+  .perf-title {
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #7a9e87;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .perf-bars {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .perf-bar-card {
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .perf-bar-card.row-store {
+    background: linear-gradient(135deg, #f5d0d7 0%, #fbe8ec 100%);
+    border: 2px solid #c46b7a;
+  }
+  .perf-bar-card.col-store {
+    background: linear-gradient(135deg, #cdddd3 0%, #e8f4ec 100%);
+    border: 2px solid #7a9e87;
+  }
+  .perf-bar-card.winner {
+    box-shadow: 0 0 0 3px rgba(122, 158, 135, 0.3);
+  }
+  .perf-bar-label {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 6px;
+  }
+  .row-store .perf-bar-label { color: #7a2233; }
+  .col-store .perf-bar-label { color: #2e5a3f; }
+  .perf-bar-time {
+    font-size: 28px;
+    font-weight: 800;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .row-store .perf-bar-time { color: #c46b7a; }
+  .col-store .perf-bar-time { color: #3d6b4f; }
+  .perf-bar-unit {
+    font-size: 11px;
+    font-weight: 600;
+    color: #a09890;
+  }
+  .perf-winner-badge {
+    display: inline-block;
+    background: #3d6b4f;
+    color: white;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    margin-top: 6px;
+  }
+  .row-store .perf-winner-badge { background: #7a2233; }
+  .perf-visual-bar {
+    height: 8px;
+    border-radius: 4px;
+    margin-top: 10px;
+    background: rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  .perf-visual-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+  .row-store .perf-visual-fill { background: #c46b7a; }
+  .col-store .perf-visual-fill { background: #3d6b4f; }
+  .perf-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .perf-meta-item {
+    background: #f0ece4;
+    border-radius: 12px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .perf-meta-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #a09890;
+    margin-bottom: 4px;
+  }
+  .perf-meta-value {
+    font-size: 14px;
+    font-weight: 800;
+    font-family: 'IBM Plex Mono', monospace;
+    color: #2e2a24;
+  }
+  .perf-insight {
+    margin-top: 14px;
+    background: #e8e2d8;
+    border-radius: 14px;
+    padding: 12px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2e2a24;
+    line-height: 1.5;
+  }
+  .perf-insight strong { color: #3d6b4f; }
 </style>
 </head>
 <body>
@@ -412,9 +542,11 @@
           <span class="snippet" data-sql="DESCRIBE ">DESCRIBE</span>
           <span class="snippet" data-sql="CREATE VIEW sample_view AS SELECT * FROM ">CREATE VIEW</span>
         </div>
-        <textarea id="queryInput" rows="3" placeholder="-- Enter SQL query here (Ctrl+Enter to run)
-SELECT * FROM Employee;
-SELECT AVG(salary) FROM Employee;
+        <textarea id="queryInput" rows="6" placeholder="-- Enter SQL query here (Ctrl+Enter to run)
+-- Example: 
+-- BEGIN;
+-- INSERT INTO Employee VALUES (1, 'John', 101, 50000);
+-- COMMIT;
 SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
         <div class="query-actions">
           <button class="btn-run" id="executeBtn">▶ Execute (Ctrl+Enter)</button>
@@ -508,10 +640,53 @@ SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
 
   // Display results from backend
   function displayResults(data) {
+    if (data.type === 'multi') {
+      resultsBody.innerHTML = '';
+      if (!data.results || data.results.length === 0) {
+        resultsBody.innerHTML = '<div class="empty-placeholder">No queries executed</div>';
+        rowCountSpan.textContent = '';
+        return;
+      }
+      
+      let totalRows = 0;
+      data.results.forEach((res, index) => {
+        const container = document.createElement('div');
+        container.style.marginBottom = '20px';
+        container.style.borderBottom = '1px solid #dfd9ce';
+        container.style.paddingBottom = '16px';
+        
+        if (data.results.length > 1) {
+          const header = document.createElement('div');
+          header.style.fontWeight = '800';
+          header.style.fontSize = '12px';
+          header.style.color = '#7a9e87';
+          header.style.marginBottom = '8px';
+          header.style.textTransform = 'uppercase';
+          header.style.letterSpacing = '1px';
+          header.textContent = `Result ${index + 1}`;
+          container.appendChild(header);
+        }
+        
+        const resultContent = document.createElement('div');
+        displaySingleResult(res, resultContent);
+        container.appendChild(resultContent);
+        resultsBody.appendChild(container);
+      });
+      
+      if (data.results.length > 1) {
+        rowCountSpan.textContent = `${data.results.length} queries executed`;
+      }
+    } else {
+      resultsBody.innerHTML = '';
+      displaySingleResult(data, resultsBody);
+    }
+  }
+
+  function displaySingleResult(data, container) {
     if (data.type === 'select') {
       if (!data.rows || data.rows.length === 0) {
-        resultsBody.innerHTML = '<div class="empty-placeholder">✨ No rows returned</div>';
-        rowCountSpan.textContent = '0 rows';
+        container.innerHTML = '<div class="empty-placeholder">✨ No rows returned</div>';
+        if(container === resultsBody) rowCountSpan.textContent = '0 rows';
         return;
       }
       const headers = Object.keys(data.rows[0]);
@@ -528,17 +703,18 @@ SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
         html += '</tr>';
       });
       html += '</tbody></table>';
-      resultsBody.innerHTML = html;
-      rowCountSpan.textContent = `${data.rows.length} row(s)`;
+      container.innerHTML = html;
+      if(container === resultsBody) rowCountSpan.textContent = `${data.rows.length} row(s)`;
     } 
     else if (data.type === 'value') {
-      resultsBody.innerHTML = `<div class="value-result">📈 Result: ${escapeHtml(String(data.value))}</div>`;
-      rowCountSpan.textContent = 'scalar';
+      container.innerHTML = `<div class="value-result">📈 Result: ${escapeHtml(String(data.value))}</div>`;
+      if(container === resultsBody) rowCountSpan.textContent = 'scalar';
     }
     else if (data.type === 'message') {
       const cls = data.success ? 'success-box' : 'error-box';
-      resultsBody.innerHTML = `<div class="message-box ${cls}">${escapeHtml(data.message)}</div>`;
-      rowCountSpan.textContent = '';
+      const icon = data.success ? '✅' : '❌';
+      container.innerHTML = `<div class="message-box ${cls}">${icon} ${escapeHtml(data.message)}</div>`;
+      if(container === resultsBody) rowCountSpan.textContent = '';
     }
     else if (data.type === 'schema') {
       let html = '<table class="result-table"><thead><tr><th>Column</th><th>Type</th></tr></thead><tbody>';
@@ -546,8 +722,8 @@ SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
         html += `<tr><td>${escapeHtml(col.name)}</td><td>${escapeHtml(col.type)}</td></tr>`;
       });
       html += '</tbody></table>';
-      resultsBody.innerHTML = html;
-      rowCountSpan.textContent = `${data.columns?.length || 0} column(s)`;
+      container.innerHTML = html;
+      if(container === resultsBody) rowCountSpan.textContent = `${data.columns?.length || 0} column(s)`;
     }
     else if (data.type === 'databases') {
       let html = '<table class="result-table"><thead><tr><th>Database</th><th>Status</th></tr></thead><tbody>';
@@ -556,26 +732,120 @@ SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
         html += `<tr><td>${escapeHtml(db)}</td><td>${active ? '🟢 Current' : ''}</td></tr>`;
       });
       html += '</tbody></table>';
-      resultsBody.innerHTML = html;
-      rowCountSpan.textContent = `${data.databases?.length || 0} database(s)`;
+      container.innerHTML = html;
+      if(container === resultsBody) rowCountSpan.textContent = `${data.databases?.length || 0} database(s)`;
     }
     else if (data.type === 'tables') {
       if (!data.tables || data.tables.length === 0) {
-        resultsBody.innerHTML = '<div class="empty-placeholder">📭 No tables in current database</div>';
+        container.innerHTML = '<div class="empty-placeholder">📭 No tables in current database</div>';
       } else {
         let html = '<table class="result-table"><thead><tr><th>Table Name</th></tr></thead><tbody>';
         data.tables.forEach(t => html += `<tr><td>📋 ${escapeHtml(t)}</td></tr>`);
         html += '</tbody></table>';
-        resultsBody.innerHTML = html;
+        container.innerHTML = html;
       }
-      rowCountSpan.textContent = `${data.tables?.length || 0} table(s)`;
+      if(container === resultsBody) rowCountSpan.textContent = `${data.tables?.length || 0} table(s)`;
     }
     else if (data.type === 'error') {
-      showError(data.message);
+      container.innerHTML = `<div class="message-box error-box">❌ Error: ${escapeHtml(data.message)}</div>`;
+      if(container === resultsBody) rowCountSpan.textContent = '';
     } 
     else {
-      resultsBody.innerHTML = `<div class="message-box">✅ ${escapeHtml(JSON.stringify(data))}</div>`;
+      container.innerHTML = `<div class="message-box">✅ ${escapeHtml(JSON.stringify(data))}</div>`;
     }
+    
+    // ── Append Performance Dashboard if benchmark data exists ──
+    if (data.benchmark) {
+      const dashDiv = document.createElement('div');
+      dashDiv.innerHTML = renderBenchmarkDashboard(data.benchmark);
+      container.appendChild(dashDiv);
+    }
+  }
+
+  function renderBenchmarkDashboard(b) {
+    const maxTime = Math.max(b.row_time_ms, b.col_time_ms);
+    const rowPct = maxTime > 0 ? (b.row_time_ms / maxTime) * 100 : 0;
+    const colPct = maxTime > 0 ? (b.col_time_ms / maxTime) * 100 : 0;
+    
+    const rowWinner = b.winner === 'row';
+    const colWinner = b.winner === 'column';
+    
+    const usedLabel = b.used_store === 'column' ? 'Column Store' : 'Row Store';
+    const winnerLabel = b.winner === 'column' ? 'Column Store' : 'Row Store';
+    
+    // Build insight text
+    let insight = '';
+    if (colWinner) {
+      insight = `<strong>Column Store</strong> was <strong>${b.speedup}x faster</strong> for this <code>${b.agg_func}(${b.agg_col})</code> query. `;
+      if (!b.has_where && !b.has_group_by) {
+        insight += `Without WHERE/GROUP BY, the column store only loaded <strong>1 column</strong> instead of all <strong>${b.num_columns} columns</strong>, reducing I/O significantly.`;
+      } else {
+        insight += `Even with filtering, the columnar layout provided faster sequential reads for aggregation.`;
+      }
+    } else {
+      insight = `<strong>Row Store</strong> was <strong>${b.speedup}x faster</strong> for this query. `;
+      if (b.has_where || b.has_group_by) {
+        insight += `With ${b.has_where ? 'WHERE' : ''}${b.has_where && b.has_group_by ? ' + ' : ''}${b.has_group_by ? 'GROUP BY' : ''}, the row store can filter and group efficiently since each row is stored together.`;
+      } else {
+        insight += `For this dataset size (${b.num_rows} rows), the overhead difference is minimal.`;
+      }
+    }
+    
+    return `
+    <div class="perf-dashboard">
+      <div class="perf-title">⚡ Performance Dashboard — ${escapeHtml(b.agg_func)}(${escapeHtml(b.agg_col)}) on ${escapeHtml(b.table_name)}</div>
+      
+      <div class="perf-bars">
+        <div class="perf-bar-card row-store ${rowWinner ? 'winner' : ''}">
+          <div class="perf-bar-label">📦 Row Store</div>
+          <div class="perf-bar-time">${b.row_time_ms.toFixed(4)}</div>
+          <div class="perf-bar-unit">milliseconds (avg of 100 runs)</div>
+          ${rowWinner ? '<div class="perf-winner-badge">⚡ FASTER</div>' : ''}
+          <div class="perf-visual-bar">
+            <div class="perf-visual-fill" style="width: ${rowPct}%"></div>
+          </div>
+        </div>
+        
+        <div class="perf-bar-card col-store ${colWinner ? 'winner' : ''}">
+          <div class="perf-bar-label">📊 Column Store</div>
+          <div class="perf-bar-time">${b.col_time_ms.toFixed(4)}</div>
+          <div class="perf-bar-unit">milliseconds (avg of 100 runs)</div>
+          ${colWinner ? '<div class="perf-winner-badge">⚡ FASTER</div>' : ''}
+          <div class="perf-visual-bar">
+            <div class="perf-visual-fill" style="width: ${colPct}%"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="perf-meta">
+        <div class="perf-meta-item">
+          <div class="perf-meta-label">Query Used</div>
+          <div class="perf-meta-value">${usedLabel}</div>
+        </div>
+        <div class="perf-meta-item">
+          <div class="perf-meta-label">Winner</div>
+          <div class="perf-meta-value">${winnerLabel}</div>
+        </div>
+        <div class="perf-meta-item">
+          <div class="perf-meta-label">Speedup</div>
+          <div class="perf-meta-value">${b.speedup}x</div>
+        </div>
+        <div class="perf-meta-item">
+          <div class="perf-meta-label">Table Rows</div>
+          <div class="perf-meta-value">${b.num_rows}</div>
+        </div>
+        <div class="perf-meta-item">
+          <div class="perf-meta-label">Columns (Row I/O)</div>
+          <div class="perf-meta-value">${b.columns_loaded_row}</div>
+        </div>
+        <div class="perf-meta-item">
+          <div class="perf-meta-label">Columns (Col I/O)</div>
+          <div class="perf-meta-value">${b.columns_loaded_col}</div>
+        </div>
+      </div>
+      
+      <div class="perf-insight">💡 ${insight}</div>
+    </div>`;
   }
 
   // Core execute command (matching required functionality)
@@ -594,10 +864,10 @@ SELECT dept_id, AVG(salary) FROM Employee GROUP BY dept_id;"></textarea>
 
       // Refresh sidebar on DDL / DB changes
       const upper = query.toUpperCase();
-      if (upper.includes('CREATE DATABASE') || upper.includes('USE DATABASE') || upper.includes('DROP DATABASE')) {
+      if (upper.includes('CREATE DATABASE') || upper.includes('USE DATABASE') || upper.includes('DROP DATABASE') || upper.includes('DELETE DATABASE')) {
         await refreshSidebar();
       }
-      if (upper.includes('CREATE TABLE') || upper.includes('DROP TABLE') || 
+      if (upper.includes('CREATE TABLE') || upper.includes('DROP TABLE') || upper.includes('DELETE TABLE') ||
           upper.includes('CREATE VIEW') || upper.includes('DROP VIEW') ||
           upper.includes('CREATE TRIGGER') || upper.includes('DROP TRIGGER')) {
         await refreshTables();

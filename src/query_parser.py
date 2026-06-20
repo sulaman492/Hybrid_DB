@@ -91,14 +91,14 @@ class QueryParser:
         
         # Pattern for SELECT with JOIN
         # SELECT * FROM table1 JOIN table2 ON table1.col = table2.col WHERE condition
-        join_pattern = r"SELECT\s+(DISTINCT\s+)?(\*|\w+)\s+FROM\s+(\w+)\s+(INNER|LEFT)\s+JOIN\s+(\w+)\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)(?:\s+WHERE\s+(.+))?\s*;?"
+        join_pattern = r"SELECT\s+(DISTINCT\s+)?(\*|(?:[\w\.]+(?:\s*,\s*[\w\.]+)*))\s+FROM\s+(\w+)\s+(?:(INNER|LEFT)\s+)?JOIN\s+(\w+)\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)(?:\s+WHERE\s+(.+))?\s*;?"
         join_match = re.match(join_pattern, query_clean, re.IGNORECASE | re.DOTALL)
         
         if join_match:
             distinct_flag = join_match.group(1) is not None
-            select_col = join_match.group(2)
+            select_col_raw = join_match.group(2).strip()
             table1 = join_match.group(3)
-            join_type = join_match.group(4).upper()
+            join_type = (join_match.group(4) or "INNER").upper()
             table2 = join_match.group(5)
             # FIX: Swap t1_table and t1_col to correctly match regex groups
             t1_table = join_match.group(6)
@@ -106,6 +106,13 @@ class QueryParser:
             t2_table = join_match.group(8)
             t2_col = join_match.group(9)
             where_condition = join_match.group(10) if join_match.group(10) else None
+            
+            if select_col_raw == "*":
+                select_col = "*"
+            elif "," in select_col_raw:
+                select_col = [c.strip() for c in select_col_raw.split(",")]
+            else:
+                select_col = select_col_raw
             
             return {
                 "type": "join",
@@ -226,29 +233,51 @@ class QueryParser:
             
         return table_name, set_column, set_value, where_condition
     @staticmethod
+    def _split_conditions(condition):
+        """Split conditions safely, preserving BETWEEN ... AND ..."""
+        between_clauses = {}
+        temp_cond = condition
+        
+        def replacer(m):
+            key = f"__BETWEEN_{len(between_clauses)}__"
+            between_clauses[key] = m.group(0)
+            return key
+            
+        temp_cond = re.sub(r'\w+\s+BETWEEN\s+[^\s]+\s+AND\s+[^\s]+', replacer, temp_cond, flags=re.IGNORECASE)
+        return temp_cond, between_clauses
+
+    @staticmethod
     def evaluate_where(row, condition):
         """Evaluate WHERE condition on a row"""
         if not condition:
             return True
+            
+        temp_cond, between_clauses = QueryParser._split_conditions(condition)
         
         # Handle AND conditions
-        if " AND " in condition.upper():
-            parts = re.split(r'\s+AND\s+', condition, flags=re.IGNORECASE)
+        if " AND " in temp_cond.upper():
+            parts = re.split(r'\s+AND\s+', temp_cond, flags=re.IGNORECASE)
             for part in parts:
+                for k, v in between_clauses.items():
+                    part = part.replace(k, v)
                 if not QueryParser._evaluate_single_condition(row, part):
                     return False
             return True
         
         # Handle OR conditions
-        if " OR " in condition.upper():
-            parts = re.split(r'\s+OR\s+', condition, flags=re.IGNORECASE)
+        if " OR " in temp_cond.upper():
+            parts = re.split(r'\s+OR\s+', temp_cond, flags=re.IGNORECASE)
             for part in parts:
+                for k, v in between_clauses.items():
+                    part = part.replace(k, v)
                 if QueryParser._evaluate_single_condition(row, part):
                     return True
             return False
         
         # Single condition
-        return QueryParser._evaluate_single_condition(row, condition)
+        for k, v in between_clauses.items():
+            temp_cond = temp_cond.replace(k, v)
+        return QueryParser._evaluate_single_condition(row, temp_cond)
     
     @staticmethod
     def _evaluate_single_condition(row, condition):
@@ -295,7 +324,10 @@ class QueryParser:
                         pass
                 
                 row_val = row.get(col)
-                return low <= row_val <= high
+                try:
+                    return low <= row_val <= high
+                except TypeError:
+                    return False
             return False
         
         # Handle LIKE operator (basic)
@@ -352,18 +384,32 @@ class QueryParser:
         """
         if not condition:
             return True
+            
+        temp_cond, between_clauses = QueryParser._split_conditions(condition)
         
         # Handle AND conditions
-        if " AND " in condition.upper():
-            parts = re.split(r'\s+AND\s+', condition, flags=re.IGNORECASE)
-            return all(QueryParser._evaluate_having_single(row, p) for p in parts)
+        if " AND " in temp_cond.upper():
+            parts = re.split(r'\s+AND\s+', temp_cond, flags=re.IGNORECASE)
+            final_parts = []
+            for p in parts:
+                for k, v in between_clauses.items():
+                    p = p.replace(k, v)
+                final_parts.append(p)
+            return all(QueryParser._evaluate_having_single(row, p) for p in final_parts)
         
         # Handle OR conditions
-        if " OR " in condition.upper():
-            parts = re.split(r'\s+OR\s+', condition, flags=re.IGNORECASE)
-            return any(QueryParser._evaluate_having_single(row, p) for p in parts)
+        if " OR " in temp_cond.upper():
+            parts = re.split(r'\s+OR\s+', temp_cond, flags=re.IGNORECASE)
+            final_parts = []
+            for p in parts:
+                for k, v in between_clauses.items():
+                    p = p.replace(k, v)
+                final_parts.append(p)
+            return any(QueryParser._evaluate_having_single(row, p) for p in final_parts)
         
-        return QueryParser._evaluate_having_single(row, condition)
+        for k, v in between_clauses.items():
+            temp_cond = temp_cond.replace(k, v)
+        return QueryParser._evaluate_having_single(row, temp_cond)
 
     @staticmethod
     def _evaluate_having_single(row, condition):
@@ -456,8 +502,8 @@ class QueryParser:
         }
     @staticmethod
     def parse_drop_table(query):
-        """Parse DROP TABLE query"""
-        pattern = r"DROP\s+TABLE\s+(\w+)\s*;?"
+        """Parse DROP TABLE or DELETE TABLE query"""
+        pattern = r"(?:DROP|DELETE)\s+TABLE\s+(\w+)\s*;?"
         match = re.match(pattern, query, re.IGNORECASE)
         
         if not match:
@@ -468,8 +514,8 @@ class QueryParser:
     
     @staticmethod
     def parse_drop_database(query):
-        """Parse DROP DATABASE query"""
-        pattern = r"DROP\s+DATABASE\s+(\w+)\s*;?"
+        """Parse DROP DATABASE or DELETE DATABASE query"""
+        pattern = r"(?:DROP|DELETE)\s+DATABASE\s+(\w+)\s*;?"
         match = re.match(pattern, query, re.IGNORECASE)
         
         if not match:

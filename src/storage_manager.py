@@ -103,5 +103,64 @@ class StorageManager:
             f.write(f"# Column: {column_name}\n")
             for val in values:
                 f.write(str(val) + "\n")
-        
         return True
+
+    # ========== TRANSACTION METHODS ==========
+    def backup_table(self, db_name, table_name):
+        """Create a .bak shadow copy of the table for rollback."""
+        table_dir = os.path.join(self.data_dir, db_name, table_name)
+        bak_dir = os.path.join(self.data_dir, db_name, f"{table_name}.bak")
+        
+        import shutil
+        if os.path.exists(bak_dir):
+            shutil.rmtree(bak_dir)
+            
+        if os.path.exists(table_dir):
+            shutil.copytree(table_dir, bak_dir)
+        else:
+            # Table doesn't exist yet (created during tx), touch a marker
+            os.makedirs(bak_dir, exist_ok=True)
+            with open(os.path.join(bak_dir, "_not_exist.marker"), "w") as f:
+                f.write("1")
+                
+    def restore_backups(self, db_name, tables):
+        """Restore tables from .bak shadow copies."""
+        import shutil
+        for table_name in tables:
+            table_dir = os.path.join(self.data_dir, db_name, table_name)
+            bak_dir = os.path.join(self.data_dir, db_name, f"{table_name}.bak")
+            
+            if os.path.exists(bak_dir):
+                if os.path.exists(table_dir):
+                    shutil.rmtree(table_dir)
+                    
+                if os.path.exists(os.path.join(bak_dir, "_not_exist.marker")):
+                    # It was created during tx, so just remove the marker and don't restore table
+                    pass
+                else:
+                    shutil.copytree(bak_dir, table_dir)
+                
+                shutil.rmtree(bak_dir)
+                
+    def discard_backups(self, db_name, tables):
+        """Delete .bak shadow copies after successful commit."""
+        import shutil
+        for table_name in tables:
+            bak_dir = os.path.join(self.data_dir, db_name, f"{table_name}.bak")
+            if os.path.exists(bak_dir):
+                shutil.rmtree(bak_dir)
+                
+    def auto_recover_crashes(self, db_name):
+        """Scan and restore any orphaned .bak directories (crash recovery)."""
+        db_dir = os.path.join(self.data_dir, db_name)
+        if not os.path.exists(db_dir):
+            return
+            
+        tables_to_restore = []
+        for entry in os.listdir(db_dir):
+            if entry.endswith(".bak"):
+                tables_to_restore.append(entry[:-4])
+                
+        if tables_to_restore:
+            print(f"[RECOVERY] Found uncommitted transactions for {tables_to_restore}. Rolling back...")
+            self.restore_backups(db_name, tables_to_restore)

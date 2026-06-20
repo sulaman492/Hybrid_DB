@@ -97,9 +97,48 @@ function displayResults(data) {
     const resultsDiv = document.getElementById('results');
     const rowCountSpan = document.getElementById('rowCount');
     
+    if (data.type === 'multi') {
+        resultsDiv.innerHTML = '';
+        if (data.results.length === 0) {
+            resultsDiv.innerHTML = '<div class="placeholder">No queries executed</div>';
+            rowCountSpan.textContent = '';
+            return;
+        }
+        
+        data.results.forEach((res, index) => {
+            const container = document.createElement('div');
+            container.className = 'query-result-block';
+            container.style.marginBottom = '20px';
+            container.style.borderBottom = '1px solid #eee';
+            container.style.paddingBottom = '10px';
+            
+            if (data.results.length > 1) {
+                const header = document.createElement('h4');
+                header.textContent = `Result ${index + 1}`;
+                header.style.marginTop = '0';
+                header.style.color = '#666';
+                container.appendChild(header);
+            }
+            
+            const resultContent = document.createElement('div');
+            displaySingleResult(res, resultContent, rowCountSpan);
+            container.appendChild(resultContent);
+            resultsDiv.appendChild(container);
+        });
+        
+        if (data.results.length > 1) {
+            rowCountSpan.textContent = `${data.results.length} queries executed`;
+        }
+    } else {
+        resultsDiv.innerHTML = '';
+        displaySingleResult(data, resultsDiv, rowCountSpan);
+    }
+}
+
+function displaySingleResult(data, container, rowCountSpan) {
     if (data.type === 'select') {
         if (data.rows.length === 0) {
-            resultsDiv.innerHTML = '<div class="placeholder">No results found</div>';
+            container.innerHTML = '<div class="placeholder">No results found</div>';
             rowCountSpan.textContent = '0 rows';
             return;
         }
@@ -134,17 +173,18 @@ function displayResults(data) {
         });
         table.appendChild(tbody);
         
-        resultsDiv.innerHTML = '';
-        resultsDiv.appendChild(table);
+        container.innerHTML = '';
+        container.appendChild(table);
         rowCountSpan.textContent = `${data.count} row(s)`;
         
     } else if (data.type === 'value') {
-        resultsDiv.innerHTML = `<div class="value-result">Result: ${data.value}</div>`;
+        container.innerHTML = `<div class="value-result">Result: ${data.value}</div>`;
         rowCountSpan.textContent = '1 value';
         
     } else if (data.type === 'message') {
         const className = data.success ? 'success' : 'error';
-        resultsDiv.innerHTML = `<div class="${className}">${data.message}</div>`;
+        const icon = data.success ? '✅' : '❌';
+        container.innerHTML = `<div class="${className}">${icon} ${data.message}</div>`;
         rowCountSpan.textContent = '';
         
     } else if (data.type === 'schema') {
@@ -153,7 +193,7 @@ function displayResults(data) {
             html += `<tr><td>${col.name}</td><td>${col.type}</td></tr>`;
         });
         html += '</tbody></table>';
-        resultsDiv.innerHTML = html;
+        container.innerHTML = html;
         rowCountSpan.textContent = `${data.columns.length} column(s)`;
         
     } else if (data.type === 'databases') {
@@ -163,24 +203,25 @@ function displayResults(data) {
             html += `<tr><td>${db}</td><td>${isCurrent ? '🟢 Current' : ''}</td></tr>`;
         });
         html += '</tbody></table>';
-        resultsDiv.innerHTML = html;
+        container.innerHTML = html;
         rowCountSpan.textContent = `${data.databases.length} database(s)`;
         
     } else if (data.type === 'tables') {
         if (data.tables.length === 0) {
-            resultsDiv.innerHTML = '<div class="placeholder">No tables found</div>';
+            container.innerHTML = '<div class="placeholder">No tables found</div>';
         } else {
             let html = '<table><thead><tr><th>Table Name</th></tr></thead><tbody>';
             data.tables.forEach(table => {
                 html += `<tr><td>📋 ${table}</td></tr>`;
             });
             html += '</tbody></table>';
-            resultsDiv.innerHTML = html;
+            container.innerHTML = html;
         }
         rowCountSpan.textContent = `${data.tables.length} table(s)`;
         
     } else if (data.type === 'error') {
-        showError(data.message);
+        container.innerHTML = `<div class="error">❌ Error: ${data.message}</div>`;
+        rowCountSpan.textContent = '';
     }
 }
 
